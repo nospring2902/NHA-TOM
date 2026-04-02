@@ -3,6 +3,9 @@ import { Link } from "react-router-dom";
 import { Grid3x3, Waves, Settings, MapPin } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { AddPondModal } from "@/components/AddPondModal";
+import { DeviceSignalStatus } from "@/components/DeviceSignalStatus";
+import { BoundDevice, CreatePondAndBindResult } from "@/lib/device-binding";
 import AppLayout from "@/components/AppLayout";
 
 const userPosts = [
@@ -20,8 +23,79 @@ const userPonds = [
   { id: 3, name: "Ao Tôm B1", area: "3,000 m²", location: "Bạc Liêu" },
 ];
 
+type PondSetupStatus = "READY" | "WAITING_SIGNAL" | "ONLINE";
+
+type ProfilePond = {
+  id: string;
+  name: string;
+  area: string;
+  location: string;
+  status: PondSetupStatus;
+  boundDevice?: BoundDevice;
+};
+
+const statusUi: Record<PondSetupStatus, { label: string; className: string }> = {
+  READY: {
+    label: "Sẵn sàng vận hành",
+    className: "bg-secondary text-secondary-foreground",
+  },
+  WAITING_SIGNAL: {
+    label: "Đang đợi tín hiệu",
+    className: "bg-coral/10 text-coral",
+  },
+  ONLINE: {
+    label: "Đã trực tuyến",
+    className: "bg-aqua-light text-aqua",
+  },
+};
+
 const ProfilePage = () => {
   const [activeTab, setActiveTab] = useState<"posts" | "ponds">("posts");
+  const [ponds, setPonds] = useState<ProfilePond[]>(
+    userPonds.map((pond) => ({
+      id: String(pond.id),
+      name: pond.name,
+      area: pond.area,
+      location: pond.location,
+      status: "READY",
+    })),
+  );
+
+  const handlePondCreated = (result: CreatePondAndBindResult) => {
+    setPonds((current) => {
+      const withoutDuplicated = current.filter((item) => item.id !== result.pond.id);
+      return [
+        {
+          id: result.pond.id,
+          name: result.pond.name,
+          area: `${result.pond.areaM2.toLocaleString("vi-VN")} m²`,
+          location: result.pond.location,
+          status: "WAITING_SIGNAL",
+          boundDevice: result.device,
+        },
+        ...withoutDuplicated,
+      ];
+    });
+  };
+
+  const handleSignalStatusChange = (pondId: string, isOnline: boolean) => {
+    setPonds((current) => {
+      return current.map((item) => {
+        if (item.id !== pondId) {
+          return item;
+        }
+
+        if (item.status === "READY") {
+          return item;
+        }
+
+        return {
+          ...item,
+          status: isOnline ? "ONLINE" : "WAITING_SIGNAL",
+        };
+      });
+    });
+  };
 
   return (
     <AppLayout>
@@ -89,9 +163,11 @@ const ProfilePage = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {userPonds.map((pond) => (
-              <Link key={pond.id} to={`/dashboard/${pond.id}`}>
-                <div className="bg-card rounded-xl border border-border shadow-card p-4 hover:shadow-elevated transition-all cursor-pointer group">
+            {ponds.map((pond) => {
+              const statusConfig = statusUi[pond.status];
+
+              return (
+                <div key={pond.id} className="bg-card rounded-xl border border-border shadow-card p-4 hover:shadow-elevated transition-all group">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg gradient-ocean flex items-center justify-center group-hover:shadow-glow transition-shadow">
@@ -102,14 +178,37 @@ const ProfilePage = () => {
                         <p className="text-xs text-muted-foreground">{pond.area} · {pond.location}</p>
                       </div>
                     </div>
-                    <span className="text-xs text-aqua font-medium">Xem chi tiết →</span>
+                    <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${statusConfig.className}`}>
+                      {statusConfig.label}
+                    </span>
                   </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={`/dashboard/${pond.id}`}>Mở dashboard</Link>
+                    </Button>
+                  </div>
+
+                  {pond.boundDevice && (
+                    <div className="mt-3 rounded-lg border border-border/70 bg-muted/40 p-3 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Thiết bị chính của ao</p>
+                      <div className="rounded-md border border-border bg-card p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium text-foreground">{pond.boundDevice.model}</p>
+                          <p className="text-[11px] text-muted-foreground">Serial: {pond.boundDevice.serialNumber}</p>
+                        </div>
+                        <DeviceSignalStatus
+                          pondId={pond.id}
+                          deviceId={pond.boundDevice.id}
+                          onStatusChange={(isOnline) => handleSignalStatusChange(pond.id, isOnline)}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </Link>
-            ))}
-            <Button variant="outline" className="w-full border-dashed text-muted-foreground">
-              + Thêm ao tôm mới
-            </Button>
+              );
+            })}
+            <AddPondModal onCreated={handlePondCreated} />
           </div>
         )}
       </div>
