@@ -4,6 +4,9 @@ import { Droplets, Thermometer, Wind, Gauge, Power, ArrowLeft, CloudRain, Sun, A
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AddDeviceModal } from "@/components/AddDeviceModal";
+import { DeviceSignalStatus } from "@/components/DeviceSignalStatus";
+import { BoundDevice } from "@/lib/device-binding";
 
 const chartData = [
   { time: "06:00", pH: 7.6, DO: 5.1, temp: 28.5 },
@@ -29,10 +32,19 @@ const activityLog = [
 
 const DashboardPage = () => {
   const { id } = useParams();
+  const pondId = id ?? "1";
   const [aerator, setAerator] = useState(true);
   const [pump, setPump] = useState(false);
   const [light, setLight] = useState(true);
   const [activeChart, setActiveChart] = useState<"pH" | "DO" | "temp">("pH");
+  const [boundDevices, setBoundDevices] = useState<BoundDevice[]>([]);
+
+  const handleDeviceBoundSuccess = (device: BoundDevice) => {
+    setBoundDevices((current) => {
+      const withoutDuplicated = current.filter((item) => item.id !== device.id);
+      return [device, ...withoutDuplicated];
+    });
+  };
 
   const sensorCards = [
     { label: "Nhiệt độ", value: "29.5°C", icon: Thermometer, color: "text-coral", status: "Bình thường" },
@@ -61,7 +73,7 @@ const DashboardPage = () => {
               </Button>
             </Link>
             <div>
-              <h1 className="text-base font-bold text-foreground">Ao Tôm A{id}</h1>
+              <h1 className="text-base font-bold text-foreground">Ao Tôm A{pondId}</h1>
               <p className="text-xs text-muted-foreground">2,000 m² · Cà Mau</p>
             </div>
           </div>
@@ -204,6 +216,39 @@ const DashboardPage = () => {
                   </button>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-5 border-t border-border pt-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Thiết bị IoT đã kết nối</p>
+                  <p className="text-xs text-muted-foreground">Kết nối thiết bị bằng Serial để nhận dữ liệu telemetry.</p>
+                </div>
+                <AddDeviceModal pondId={pondId} onBoundSuccess={handleDeviceBoundSuccess} />
+              </div>
+
+              {boundDevices.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
+                  Chưa có thiết bị nào được bind thủ công cho ao này.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {boundDevices.map((device) => (
+                    <div key={device.id} className="rounded-lg border border-border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{device.model}</p>
+                          <p className="text-xs text-muted-foreground tracking-wide">Serial: {device.serialNumber}</p>
+                        </div>
+                        <span className="text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
+                          {device.status === "ONLINE" ? "Đã trực tuyến" : "Đang chờ tín hiệu"}
+                        </span>
+                      </div>
+                      <DeviceSignalStatus pondId={pondId} deviceId={device.id} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

@@ -1,0 +1,906 @@
+openapi: 3.1.0
+info:
+  title: AquaShrimp Backend API
+  version: 1.0.0
+  description: API spec for AquaShrimp IoT shrimp pond platform.
+servers:
+  - url: http://localhost:3000
+    description: Local
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register user account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthEnvelope'
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthEnvelope'
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthEnvelope'
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+
+  /api/v1/users/me:
+    get:
+      tags: [Users]
+      summary: Get profile
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+    patch:
+      tags: [Users]
+      summary: Update profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+
+  /api/v1/ponds:
+    get:
+      tags: [Ponds]
+      summary: List ponds
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Ponds list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PondListEnvelope'
+    post:
+      tags: [Ponds]
+      summary: Add new pond with IoT provisioning payload
+      description: |
+        Create pond and start provisioning lifecycle.
+        Recommended backend lifecycle: draft -> provisioning -> waiting_telemetry -> active.
+        When create succeeds, backend should bind devices by serial number and return provisioning status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePondRequest'
+      responses:
+        '200':
+          description: Pond created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PondEnvelope'
+
+  /api/v1/ponds/{id}:
+    get:
+      tags: [Ponds]
+      summary: Pond detail
+      parameters:
+        - $ref: '#/components/parameters/PondId'
+      responses:
+        '200':
+          description: Pond detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PondEnvelope'
+    patch:
+      tags: [Ponds]
+      summary: Update pond
+      parameters:
+        - $ref: '#/components/parameters/PondId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePondRequest'
+      responses:
+        '200':
+          description: Pond updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PondEnvelope'
+    delete:
+      tags: [Ponds]
+      summary: Delete pond
+      parameters:
+        - $ref: '#/components/parameters/PondId'
+      responses:
+        '200':
+          description: Pond deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteEnvelope'
+
+  /api/v1/ponds/{id}/bind-device:
+    post:
+      tags: [Ponds]
+      summary: Bind device to pond by serial number
+      description: |
+        Manual activation flow for IoT device.
+        Backend must validate serial in DeviceInventory, ensure status AVAILABLE,
+        validate pond ownership, then create Device and mark inventory ACTIVATED.
+      parameters:
+        - $ref: '#/components/parameters/PondId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindDeviceRequest'
+      responses:
+        '200':
+          description: Device bound successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BindDeviceEnvelope'
+
+  /api/v1/ponds/{id}/devices/{deviceId}/telemetry-status:
+    get:
+      tags: [Ponds]
+      summary: Get telemetry status for a bound device
+      parameters:
+        - $ref: '#/components/parameters/PondId'
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Telemetry status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTelemetryStatusEnvelope'
+
+  /api/v1/ponds/{pondId}/metrics/latest:
+    get:
+      tags: [Metrics]
+      summary: Latest metrics for pond
+      parameters:
+        - $ref: '#/components/parameters/PondIdParam'
+      responses:
+        '200':
+          description: Latest metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricEnvelope'
+
+  /api/v1/ponds/{pondId}/metrics/history:
+    get:
+      tags: [Metrics]
+      summary: Historical metrics
+      parameters:
+        - $ref: '#/components/parameters/PondIdParam'
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: interval
+          schema: { type: string, enum: [1m, 5m, 15m, 1h] }
+      responses:
+        '200':
+          description: History
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricHistoryEnvelope'
+
+  /api/v1/ponds/{pondId}/dashboard/score:
+    get:
+      tags: [Dashboard]
+      summary: Water quality score
+      parameters:
+        - $ref: '#/components/parameters/PondIdParam'
+      responses:
+        '200':
+          description: Score
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoreEnvelope'
+
+  /api/v1/ponds/{pondId}/alerts:
+    get:
+      tags: [Alerts]
+      summary: Active or recent alerts
+      parameters:
+        - $ref: '#/components/parameters/PondIdParam'
+      responses:
+        '200':
+          description: Alerts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertListEnvelope'
+
+  /api/v1/ponds/{pondId}/activity-logs:
+    get:
+      tags: [Activity Logs]
+      summary: Device and automation activity logs
+      parameters:
+        - $ref: '#/components/parameters/PondIdParam'
+      responses:
+        '200':
+          description: Activity logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityLogListEnvelope'
+
+  /api/v1/ponds/{pondId}/devices:
+    get:
+      tags: [Devices]
+      summary: Device status list
+      parameters:
+        - $ref: '#/components/parameters/PondIdParam'
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceListEnvelope'
+
+  /api/v1/ponds/{pondId}/devices/{deviceId}/commands:
+    post:
+      tags: [Devices]
+      summary: Send command to device
+      parameters:
+        - $ref: '#/components/parameters/PondIdParam'
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeviceCommandRequest'
+      responses:
+        '200':
+          description: Command accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceCommandEnvelope'
+
+  /api/v1/posts:
+    get:
+      tags: [Posts]
+      summary: Feed posts
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Posts list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostListEnvelope'
+    post:
+      tags: [Posts]
+      summary: Create post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePostRequest'
+      responses:
+        '200':
+          description: Post created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostEnvelope'
+
+  /api/v1/posts/{id}/like:
+    post:
+      tags: [Posts]
+      summary: Like post
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      responses:
+        '200':
+          description: Liked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LikeEnvelope'
+    delete:
+      tags: [Posts]
+      summary: Unlike post
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      responses:
+        '200':
+          description: Unliked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LikeEnvelope'
+
+  /api/v1/posts/{id}/comments:
+    get:
+      tags: [Posts]
+      summary: List comments
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      responses:
+        '200':
+          description: Comments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentListEnvelope'
+    post:
+      tags: [Posts]
+      summary: Create comment
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+      responses:
+        '200':
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentEnvelope'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PondId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+    PondIdParam:
+      in: path
+      name: pondId
+      required: true
+      schema: { type: string }
+    DeviceId:
+      in: path
+      name: deviceId
+      required: true
+      schema: { type: string }
+    PostId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+
+  schemas:
+    ApiEnvelope:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data: {}
+        meta:
+          type: object
+          additionalProperties: true
+
+    RegisterRequest:
+      type: object
+      required: [fullName, email, password]
+      properties:
+        fullName: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        phone: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    UpdateMeRequest:
+      type: object
+      properties:
+        fullName: { type: string }
+        phone: { type: string }
+        dob: { type: string, format: date }
+        address: { type: string }
+        experience: { type: string }
+
+    GeoPoint:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+
+    ProvisioningDevice:
+      type: object
+      required: [serialNumber, type]
+      properties:
+        serialNumber: { type: string }
+        type:
+          type: string
+          enum: [sensor_gateway, aerator, pump, light, feeder]
+        firmwareVersion: { type: string }
+
+    CreatePondRequest:
+      type: object
+      required:
+        - name
+        - farmName
+        - province
+        - district
+        - ward
+        - areaM2
+        - averageDepthM
+        - waterType
+        - devices
+      properties:
+        name: { type: string }
+        farmName: { type: string }
+        province: { type: string }
+        district: { type: string }
+        ward: { type: string }
+        areaM2: { type: number, minimum: 1 }
+        averageDepthM: { type: number, minimum: 0.1 }
+        waterType:
+          type: string
+          enum: [freshwater, brackish, marine]
+        geo:
+          $ref: '#/components/schemas/GeoPoint'
+        timezone:
+          type: string
+          example: Asia/Ho_Chi_Minh
+        devices:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ProvisioningDevice'
+
+    UpdatePondRequest:
+      type: object
+      properties:
+        name: { type: string }
+        province: { type: string }
+        district: { type: string }
+        ward: { type: string }
+        areaM2: { type: number }
+        averageDepthM: { type: number }
+        waterType:
+          type: string
+          enum: [freshwater, brackish, marine]
+
+    BindDeviceRequest:
+      type: object
+      required: [serialNumber]
+      properties:
+        serialNumber:
+          type: string
+          pattern: '^AS-\\d{4}-\\d{4}$'
+          example: AS-2026-0001
+
+    User:
+      type: object
+      required: [id, fullName, email]
+      properties:
+        id: { type: string }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+
+    AuthPayload:
+      type: object
+      required: [accessToken, refreshToken, user]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        user:
+          $ref: '#/components/schemas/User'
+
+    Pond:
+      type: object
+      required: [id, name, areaM2, lifecycleStatus]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        farmName: { type: string }
+        province: { type: string }
+        district: { type: string }
+        ward: { type: string }
+        areaM2: { type: number }
+        averageDepthM: { type: number }
+        waterType: { type: string }
+        lifecycleStatus:
+          type: string
+          enum: [draft, provisioning, waiting_telemetry, active, paused]
+        provisioning:
+          type: object
+          properties:
+            step: { type: string }
+            requiredTelemetryWindowMinutes: { type: integer }
+            minimumSensorPackets: { type: integer }
+
+    MetricPoint:
+      type: object
+      properties:
+        measuredAt: { type: string, format: date-time }
+        ph: { type: number }
+        dissolvedOxygen: { type: number }
+        temperature: { type: number }
+        salinity: { type: number }
+
+    Score:
+      type: object
+      properties:
+        score: { type: integer }
+        level:
+          type: string
+          enum: [good, warning, danger]
+
+    Alert:
+      type: object
+      properties:
+        severity: { type: string, enum: [info, warning, critical] }
+        message: { type: string }
+        predictedFor: { type: string, format: date-time }
+
+    ActivityLog:
+      type: object
+      properties:
+        action: { type: string }
+        trigger: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Device:
+      type: object
+      properties:
+        id: { type: string }
+        serialNumber: { type: string }
+        model: { type: string }
+        type: { type: string }
+        mode: { type: string, enum: [auto, manual] }
+        isOn: { type: boolean }
+
+    BoundDevice:
+      type: object
+      properties:
+        id: { type: string }
+        pondId: { type: string }
+        serialNumber: { type: string }
+        model: { type: string }
+        type: { type: string }
+        status: { type: string, enum: [WAITING_SIGNAL, ONLINE] }
+        telemetryPackets: { type: integer }
+        boundAt: { type: string, format: date-time }
+        lastTelemetryAt: { type: string, format: date-time, nullable: true }
+
+    DeviceTelemetryStatus:
+      type: object
+      properties:
+        deviceId: { type: string }
+        serialNumber: { type: string }
+        status: { type: string, enum: [WAITING_SIGNAL, ONLINE] }
+        isOnline: { type: boolean }
+        telemetryPackets: { type: integer }
+        lastTelemetryAt: { type: string, format: date-time, nullable: true }
+
+    CreateDeviceCommandRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [turn_on, turn_off, set_auto, set_manual]
+        reason: { type: string }
+
+    DeviceCommand:
+      type: object
+      properties:
+        pondId: { type: string }
+        deviceId: { type: string }
+        action: { type: string }
+        reason: { type: string }
+        queuedAt: { type: string, format: date-time }
+
+    Post:
+      type: object
+      properties:
+        id: { type: string }
+        content: { type: string }
+        imageUrl: { type: string }
+
+    CreatePostRequest:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string }
+        imageUrl: { type: string }
+
+    LikeResult:
+      type: object
+      properties:
+        postId: { type: string }
+        liked: { type: boolean }
+
+    Comment:
+      type: object
+      properties:
+        id: { type: string }
+        postId: { type: string }
+        content: { type: string }
+
+    CreateCommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string }
+
+    AuthEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AuthPayload'
+
+    UserEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/User'
+
+    PondEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Pond'
+
+    PondListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Pond'
+
+    MetricEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/MetricPoint'
+
+    MetricHistoryEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                points:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MetricPoint'
+
+    ScoreEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Score'
+
+    AlertListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Alert'
+
+    ActivityLogListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ActivityLog'
+
+    DeviceListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Device'
+
+    DeviceCommandEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DeviceCommand'
+
+    BindDeviceEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/BoundDevice'
+
+    DeviceTelemetryStatusEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DeviceTelemetryStatus'
+
+    PostEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Post'
+
+    PostListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Post'
+
+    LikeEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/LikeResult'
+
+    CommentEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Comment'
+
+    CommentListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Comment'
+
+    DeleteEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                id: { type: string }
+                deleted: { type: boolean }

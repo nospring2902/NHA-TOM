@@ -1,98 +1,255 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# NHATOM Backend Playbook
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Tai lieu nay la huong dan chuan de chay, test, kiem tra database va hoan thien backend cho du an kiem soat va du doan chat luong nuoc.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 1) Stack va pham vi
 
-## Description
+- Framework: NestJS
+- ORM: Prisma
+- Database: PostgreSQL
+- Auth: JWT access token + refresh session
+- Muc tieu MVP backend:
+  - Auth (register/login/me/refresh)
+  - Ponds + bind device
+  - Metrics latest/history
+  - Alerts + dashboard summary
+  - Activity logs
+  - Ingest telemetry tu ThingsBoard
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 2) Bien moi truong bat buoc
 
-## Project setup
+Tao file `.env` voi toi thieu:
 
-```bash
-$ npm install
+```env
+PORT=3000
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nhatom?schema=public"
+JWT_ACCESS_SECRET=replace_with_strong_secret
+JWT_ACCESS_EXPIRES_IN=15m
 ```
 
-## Compile and run the project
+Khuyen nghi:
+- JWT_ACCESS_SECRET dai >= 32 ky tu.
+- Moi moi truong (local/staging/prod) dung secret rieng.
+
+## 3) Trinh tu chay local (end-to-end)
+
+### Buoc 1: Cai dependencies
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+### Buoc 2: Khoi dong PostgreSQL
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run db:up
 ```
 
-## Deployment
+Neu gap loi Docker pipe tren Windows, mo Docker Desktop va dam bao Engine da Running.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Buoc 3: Tao Prisma Client
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run prisma:generate
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Buoc 4: Chay migration
 
-## Resources
+```bash
+npm run prisma:migrate -- --name init
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+### Buoc 5: Chay backend
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+npm run start:dev
+```
 
-## Support
+### Buoc 6: Kiem tra health
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Goi API:
 
-## Stay in touch
+```http
+GET /database/health
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Ky vong: tra ve trang thai ket noi DB thanh cong.
 
-## License
+## 4) Trinh tu test du an
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+### 4.1 Build check (bat buoc truoc khi push)
+
+```bash
+npm run build
+```
+
+### 4.2 Unit test
+
+```bash
+npm run test
+```
+
+### 4.3 E2E test
+
+```bash
+npm run test:e2e
+```
+
+### 4.4 Coverage
+
+```bash
+npm run test:cov
+```
+
+Khuyen nghi pipeline local truoc khi commit:
+1. `npm run build`
+2. `npm run test`
+3. `npm run test:e2e`
+
+## 5) Kiem tra database dung cach
+
+### Cach A: Prisma Studio
+
+```bash
+npm run prisma:studio
+```
+
+Dung de xem nhanh data trong bang `users`, `ponds`, `devices`, `pond_metric_snapshots`, `alerts`.
+
+### Cach B: PSQL trong container
+
+```bash
+docker exec -it nhatom-postgres psql -U postgres -d nhatom
+```
+
+SQL kiem tra nhanh:
+
+```sql
+\dt
+SELECT COUNT(*) FROM users;
+SELECT COUNT(*) FROM ponds;
+SELECT COUNT(*) FROM devices;
+SELECT COUNT(*) FROM pond_metric_snapshots;
+SELECT COUNT(*) FROM alerts;
+```
+
+### Cach C: Prisma migrate status
+
+```bash
+npx prisma migrate status
+```
+
+Ky vong: migration da duoc apply day du.
+
+## 6) Checklist nghiep vu can xong de "dong backend"
+
+### Phase 1 - Nen tang on dinh
+
+- [ ] Tat ca module su dung PrismaService, khong con mock data trong service chinh.
+- [ ] Auth middleware/guard doc user tu bearer token.
+- [ ] Validation DTO day du cho input quan trong.
+- [ ] Error format thong nhat.
+
+Definition of Done:
+- Build pass, unit pass, API auth + health chay on dinh.
+
+### Phase 2 - Core domain
+
+- [ ] Hoan thien CRUD Pond theo owner/user context.
+- [ ] Bind device bang transaction:
+  - Check inventory AVAILABLE
+  - Tao Device
+  - Tao PondDevice
+  - Cap nhat inventory ACTIVATED
+- [ ] Metrics latest/history doc DB that.
+- [ ] Dashboard summary khong hardcode.
+
+Definition of Done:
+- Frontend dashboard nhan du lieu that cho pond, device, metrics.
+
+### Phase 3 - Telemetry va canh bao
+
+- [ ] Tao endpoint ingest telemetry tu ThingsBoard.
+- [ ] Idempotency theo eventId de tranh ghi trung khi retry.
+- [ ] Cap nhat `telemetry_raw`, `pond_metric_snapshots`, `pond_metric_latest`.
+- [ ] Rule tao/cap nhat alerts tu metrics.
+
+Definition of Done:
+- Khi gui du lieu telemetry mau, dashboard thay doi theo thoi gian that.
+
+### Phase 4 - Van hanh va bao mat
+
+- [ ] Logging co trace id cho request quan trong.
+- [ ] Rate limit endpoint auth/ingest.
+- [ ] Backup/restore Postgres script.
+- [ ] Seed data cho dev/staging.
+
+Definition of Done:
+- Co quy trinh runbook su co co ban va du an san sang staging.
+
+## 7) Kich ban test E2E quan trong (uu tien cao)
+
+1. Dang ky user moi.
+2. Dang nhap lay access token.
+3. Tao pond.
+4. Bind device vao pond.
+5. Gui telemetry ingest.
+6. Goi dashboard va metrics history.
+7. Xac nhan alert duoc tao khi nguong vuot muc.
+
+Neu 7 buoc nay pass, backend da dat muc MVP chay duoc cho frontend.
+
+## 8) Prompt template cho lan tiep theo
+
+Dung template nay de prompt tiep cho agent:
+
+```text
+Muc tieu: Hoan thien backend NHATOM theo checklist README.
+
+Rang buoc:
+- Khong dung mock data trong service nghiep vu.
+- Uu tien Prisma transaction cho bind device va ingest telemetry.
+- Giu nguyen API contract hien tai neu co the.
+
+Viec can lam trong buoc nay:
+1) [ghi ro module]
+2) [ghi ro endpoint]
+3) [ghi ro test can them]
+
+Tieu chi xong:
+- npm run build pass
+- npm run test pass
+- Endpoint [X] tra ve du lieu that tu PostgreSQL
+```
+
+## 9) Lenh hay dung
+
+```bash
+# Database
+npm run db:up
+npm run db:down
+
+# Prisma
+npm run prisma:generate
+npm run prisma:migrate -- --name <migration_name>
+npm run prisma:studio
+
+# App
+npm run start:dev
+npm run build
+
+# Test
+npm run test
+npm run test:e2e
+npm run test:cov
+```
+
+## 10) Luu y de tranh loi lap lai
+
+- Neu Prisma CLI major thay doi, can dong bo version `prisma` va `@prisma/client`.
+- `JWT_ACCESS_EXPIRES_IN` nen dung gia tri hop le nhu `15m`, `1h`, `7d` hoac so giay.
+- Tren Windows, loi Docker pipe thuong do Docker Desktop chua chay.
+
+---
+
+Neu can, buoc tiep theo nen lam la viet `seed.ts` tao du lieu mau (user, pond, device, metrics) de frontend demo ngay ma khong can nhap tay.
