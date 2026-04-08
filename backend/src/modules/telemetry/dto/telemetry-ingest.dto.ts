@@ -32,9 +32,10 @@ export class TelemetryMetricsDto {
 }
 
 export class TelemetryIngestDto {
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  eventId!: string;
+  eventId?: string;
 
   @IsOptional()
   @IsISO8601()
@@ -46,7 +47,15 @@ export class TelemetryIngestDto {
 
   @IsOptional()
   @IsString()
+  deviceToken?: string;
+
+  @IsOptional()
+  @IsString()
   serialNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  tbDeviceId?: string;
 
   @IsOptional()
   @IsString()
@@ -56,6 +65,31 @@ export class TelemetryIngestDto {
   @ValidateNested()
   @Type(() => TelemetryMetricsDto)
   metrics?: TelemetryMetricsDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  ph?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  dissolvedOxygen?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  dissolved_oxygen?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  temperature?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  salinity?: number;
 
   @IsOptional()
   @IsObject()

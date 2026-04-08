@@ -1,28 +1,37 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Droplets, Thermometer, Wind, Gauge, Power, ArrowLeft, CloudRain, Sun, AlertTriangle, Download, Activity, CheckCircle2, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { AddDeviceModal } from "@/components/AddDeviceModal";
-import { DeviceSignalStatus } from "@/components/DeviceSignalStatus";
-import { BoundDevice } from "@/lib/device-binding";
+import { BoundDevice, getApiErrorMessage } from "@/lib/device-binding";
+import { DashboardRealtime, getDashboardRealtime } from "@/lib/dashboard";
 
-const chartData = [
-  { time: "06:00", pH: 7.6, DO: 5.1, temp: 28.5 },
-  { time: "08:00", pH: 7.7, DO: 5.3, temp: 29.0 },
-  { time: "10:00", pH: 7.8, DO: 5.0, temp: 30.2 },
-  { time: "12:00", pH: 8.0, DO: 4.8, temp: 31.5 },
-  { time: "14:00", pH: 7.9, DO: 4.6, temp: 32.0 },
-  { time: "16:00", pH: 7.8, DO: 4.9, temp: 31.0 },
-  { time: "18:00", pH: 7.7, DO: 5.2, temp: 29.8 },
-  { time: "20:00", pH: 7.6, DO: 5.4, temp: 28.5 },
-];
+const STATUS_LABEL: Record<BoundDevice["status"], string> = {
+  INACTIVE: "Chưa kích hoạt",
+  WAITING_SIGNAL: "Đang chờ tín hiệu",
+  ONLINE: "Đang trực tuyến",
+  OFFLINE: "Mất tín hiệu",
+  ERROR: "Lỗi thiết bị",
+  MAINTENANCE: "Bảo trì",
+};
 
-const alerts = [
-  { type: "warning", message: "Oxy có thể giảm vào ban đêm", time: "Dự đoán 6h tới" },
-  { type: "info", message: "Nhiệt độ ổn định trong 24h tới", time: "Dự đoán 24h" },
-];
+const SCORE_LABEL: Record<DashboardRealtime["level"], string> = {
+  unknown: "Chưa có dữ liệu",
+  excellent: "Rất tốt",
+  good: "Tốt",
+  fair: "Trung bình",
+  poor: "Kém",
+};
+
+const SCORE_BADGE_CLASS: Record<DashboardRealtime["level"], string> = {
+  unknown: "text-muted-foreground bg-muted",
+  excellent: "text-aqua bg-aqua-light",
+  good: "text-aqua bg-aqua-light",
+  fair: "text-coral bg-coral/10",
+  poor: "text-destructive bg-destructive/10",
+};
 
 const activityLog = [
   { time: "20:15", action: "Máy sục khí BẬT", trigger: "Oxy thấp (tự động)" },
@@ -38,6 +47,63 @@ const DashboardPage = () => {
   const [light, setLight] = useState(true);
   const [activeChart, setActiveChart] = useState<"pH" | "DO" | "temp">("pH");
   const [boundDevices, setBoundDevices] = useState<BoundDevice[]>([]);
+  const [realtime, setRealtime] = useState<DashboardRealtime | null>(null);
+  const [isRealtimeLoading, setIsRealtimeLoading] = useState(true);
+  const [realtimeError, setRealtimeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const pollRealtime = async (silent: boolean) => {
+      if (!silent && mounted) {
+        setIsRealtimeLoading(true);
+      }
+
+      try {
+        const response = await getDashboardRealtime(pondId);
+        if (!mounted) {
+          return;
+        }
+
+        setRealtime(response.data);
+        setBoundDevices(
+          response.data.devices.map((device) => ({
+            id: device.id,
+            pondId,
+            serialNumber: device.serialNumber,
+            model: device.model,
+            type: String(device.type).toLowerCase(),
+            status: device.status,
+            telemetryPackets: device.telemetryPackets,
+            boundAt: device.boundAt,
+            lastTelemetryAt: device.lastTelemetryAt,
+          })),
+        );
+        setRealtimeError(null);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+
+        setRealtimeError(getApiErrorMessage(error, "Không thể tải dữ liệu dashboard realtime"));
+      } finally {
+        if (mounted && !silent) {
+          setIsRealtimeLoading(false);
+        }
+      }
+    };
+
+    void pollRealtime(false);
+
+    const timer = window.setInterval(() => {
+      void pollRealtime(true);
+    }, 5000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [pondId]);
 
   const handleDeviceBoundSuccess = (device: BoundDevice) => {
     setBoundDevices((current) => {
@@ -46,12 +112,93 @@ const DashboardPage = () => {
     });
   };
 
-  const sensorCards = [
-    { label: "Nhiệt độ", value: "29.5°C", icon: Thermometer, color: "text-coral", status: "Bình thường" },
-    { label: "pH", value: "7.8", icon: Droplets, color: "text-primary", status: "Bình thường" },
-    { label: "Oxy hòa tan", value: "5.2 mg/L", icon: Wind, color: "text-aqua", status: "Tốt" },
-    { label: "Độ mặn", value: "22‰", icon: Gauge, color: "text-wave", status: "Bình thường" },
-  ];
+  const formatMetric = (value: number | null | undefined, suffix: string, digits = 1) => {
+    if (value == null) {
+      return `--${suffix}`;
+    }
+
+    return `${value.toFixed(digits)}${suffix}`;
+  };
+
+  const latestMetric = realtime?.latestMetric ?? null;
+
+  const sensorCards = useMemo(
+    () => [
+      {
+        label: "Nhiệt độ",
+        value: formatMetric(latestMetric?.temperature, "°C", 1),
+        icon: Thermometer,
+        color: "text-coral",
+        status: latestMetric?.temperature != null ? "Realtime" : "Chưa có dữ liệu",
+      },
+      {
+        label: "pH",
+        value: formatMetric(latestMetric?.ph, "", 2),
+        icon: Droplets,
+        color: "text-primary",
+        status: latestMetric?.ph != null ? "Realtime" : "Chưa có dữ liệu",
+      },
+      {
+        label: "Oxy hòa tan",
+        value: formatMetric(latestMetric?.dissolvedOxygen, " mg/L", 2),
+        icon: Wind,
+        color: "text-aqua",
+        status: latestMetric?.dissolvedOxygen != null ? "Realtime" : "Chưa có dữ liệu",
+      },
+      {
+        label: "Độ mặn",
+        value: formatMetric(latestMetric?.salinity, "‰", 2),
+        icon: Gauge,
+        color: "text-wave",
+        status: latestMetric?.salinity != null ? "Realtime" : "Chưa có dữ liệu",
+      },
+    ],
+    [latestMetric],
+  );
+
+  const chartData = useMemo(
+    () =>
+      (realtime?.metricsHistory ?? []).map((point) => ({
+        time: new Date(point.measuredAt).toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        pH: point.ph,
+        DO: point.dissolvedOxygen,
+        temp: point.temperature,
+      })),
+    [realtime?.metricsHistory],
+  );
+
+  const alerts = useMemo(() => {
+    const realtimeAlerts: Array<{ type: "warning" | "info"; message: string; time: string }> = [];
+
+    if (latestMetric?.dissolvedOxygen != null && latestMetric.dissolvedOxygen < 5) {
+      realtimeAlerts.push({
+        type: "warning",
+        message: "Oxy hòa tan thấp, cân nhắc bật sục khí",
+        time: "Theo dữ liệu telemetry mới nhất",
+      });
+    }
+
+    if (latestMetric?.temperature != null && latestMetric.temperature > 31) {
+      realtimeAlerts.push({
+        type: "warning",
+        message: "Nhiệt độ cao hơn ngưỡng khuyến nghị",
+        time: "Theo dữ liệu telemetry mới nhất",
+      });
+    }
+
+    if (realtimeAlerts.length === 0) {
+      realtimeAlerts.push({
+        type: "info",
+        message: "Chỉ số đang ổn định trong ngưỡng an toàn",
+        time: "Cập nhật realtime mỗi 5 giây",
+      });
+    }
+
+    return realtimeAlerts;
+  }, [latestMetric]);
 
   const chartConfig = {
     pH: { key: "pH", color: "hsl(195, 85%, 35%)", label: "pH" },
@@ -88,14 +235,35 @@ const DashboardPage = () => {
         <div className="bg-card rounded-xl border border-border shadow-card p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-foreground">Chỉ số chất lượng nước</h2>
-            <span className="text-xs font-medium text-aqua bg-aqua-light px-2.5 py-1 rounded-full">Tốt</span>
+            <span
+              className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                SCORE_BADGE_CLASS[realtime?.level ?? "unknown"]
+              }`}
+            >
+              {SCORE_LABEL[realtime?.level ?? "unknown"]}
+            </span>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-4xl font-bold text-primary">82<span className="text-lg text-muted-foreground">/100</span></div>
+            <div className="text-4xl font-bold text-primary">
+              {realtime?.score ?? "--"}
+              <span className="text-lg text-muted-foreground">/100</span>
+            </div>
             <div className="flex-1">
-              <Progress value={82} className="h-3 bg-secondary [&>div]:gradient-ocean" />
+              <Progress
+                value={realtime?.score ?? 0}
+                className="h-3 bg-secondary [&>div]:gradient-ocean"
+              />
             </div>
           </div>
+          {latestMetric?.measuredAt && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Cập nhật gần nhất: {new Date(latestMetric.measuredAt).toLocaleString("vi-VN")}
+            </p>
+          )}
+          {realtimeError && <p className="mt-2 text-xs text-destructive">{realtimeError}</p>}
+          {isRealtimeLoading && !realtime && (
+            <p className="mt-2 text-xs text-muted-foreground">Đang tải dữ liệu telemetry realtime...</p>
+          )}
         </div>
 
         {/* Sensor cards */}
@@ -132,22 +300,35 @@ const DashboardPage = () => {
                 ))}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(200, 20%, 90%)" />
-                <XAxis dataKey="time" tick={{ fontSize: 11, fill: "hsl(210, 15%, 45%)" }} />
-                <YAxis tick={{ fontSize: 11, fill: "hsl(210, 15%, 45%)" }} />
-                <Tooltip
-                  contentStyle={{
-                    background: "hsl(0, 0%, 100%)",
-                    border: "1px solid hsl(200, 20%, 90%)",
-                    borderRadius: "8px",
-                    fontSize: 12,
-                  }}
-                />
-                <Line type="monotone" dataKey={active.key} stroke={active.color} strokeWidth={2.5} dot={{ r: 3.5 }} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            {chartData.length === 0 ? (
+              <div className="h-[240px] flex items-center justify-center text-sm text-muted-foreground">
+                Chưa có dữ liệu lịch sử telemetry
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(200, 20%, 90%)" />
+                  <XAxis dataKey="time" tick={{ fontSize: 11, fill: "hsl(210, 15%, 45%)" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(210, 15%, 45%)" }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(0, 0%, 100%)",
+                      border: "1px solid hsl(200, 20%, 90%)",
+                      borderRadius: "8px",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey={active.key}
+                    stroke={active.color}
+                    strokeWidth={2.5}
+                    dot={{ r: 3.5 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Right column */}
@@ -241,10 +422,14 @@ const DashboardPage = () => {
                           <p className="text-xs text-muted-foreground tracking-wide">Serial: {device.serialNumber}</p>
                         </div>
                         <span className="text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
-                          {device.status === "ONLINE" ? "Đã trực tuyến" : "Đang chờ tín hiệu"}
+                          {STATUS_LABEL[device.status]}
                         </span>
                       </div>
-                      <DeviceSignalStatus pondId={pondId} deviceId={device.id} />
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {device.lastTelemetryAt
+                          ? `Telemetry gần nhất: ${new Date(device.lastTelemetryAt).toLocaleString("vi-VN")}`
+                          : "Chưa nhận telemetry"}
+                      </p>
                     </div>
                   ))}
                 </div>

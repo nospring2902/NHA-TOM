@@ -5,6 +5,114 @@ import { PrismaService } from '../../database/prisma.service';
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async realtime(pondId: string, userId: string) {
+    await this.assertPondOwnership(pondId, userId);
+
+    const [latest, snapshots, activeBindings] = await Promise.all([
+      this.prisma.pondMetricLatest.findUnique({
+        where: {
+          pondId,
+        },
+      }),
+      this.prisma.pondMetricSnapshot.findMany({
+        where: {
+          pondId,
+        },
+        orderBy: {
+          tsUtc: 'desc',
+        },
+        take: 72,
+        select: {
+          tsUtc: true,
+          ph: true,
+          dissolvedOxygen: true,
+          temperature: true,
+          salinity: true,
+        },
+      }),
+      this.prisma.pondDevice.findMany({
+        where: {
+          pondId,
+          unboundAt: null,
+        },
+        orderBy: {
+          boundAt: 'desc',
+        },
+        select: {
+          boundAt: true,
+          device: {
+            select: {
+              id: true,
+              serialNumber: true,
+              model: true,
+              type: true,
+              status: true,
+              isActive: true,
+              telemetryPackets: true,
+              lastTelemetryAt: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const score = latest ? this.calculateWaterScore(latest) : null;
+    const level = this.resolveScoreLevel(score);
+
+    const history = snapshots
+      .slice()
+      .reverse()
+      .map((snapshot) => ({
+        measuredAt: snapshot.tsUtc,
+        ph: snapshot.ph,
+        dissolvedOxygen: snapshot.dissolvedOxygen,
+        temperature: snapshot.temperature,
+        salinity: snapshot.salinity,
+      }));
+
+    const devices = activeBindings.map(({ device, boundAt }) => {
+      const heartbeatOnline = this.isDeviceOnlineByHeartbeat(device.lastTelemetryAt);
+      const realtimeStatus = heartbeatOnline
+        ? 'ONLINE'
+        : device.lastTelemetryAt
+          ? 'OFFLINE'
+          : 'WAITING_SIGNAL';
+
+      return {
+        id: device.id,
+        serialNumber: device.serialNumber,
+        model: device.model,
+        type: device.type,
+        status: realtimeStatus,
+        lastTelemetryAt: device.lastTelemetryAt,
+        telemetryPackets: device.telemetryPackets,
+        isActive: device.isActive,
+        boundAt,
+      };
+    });
+
+    return {
+      success: true,
+      message: 'Realtime dashboard data',
+      data: {
+        pondId,
+        score,
+        level,
+        latestMetric: latest
+          ? {
+              measuredAt: latest.updatedAt,
+              ph: latest.ph,
+              dissolvedOxygen: latest.dissolvedOxygen,
+              temperature: latest.temperature,
+              salinity: latest.salinity,
+            }
+          : null,
+        metricsHistory: history,
+        devices,
+      },
+    };
+  }
+
   async score(pondId: string, userId: string) {
     await this.assertPondOwnership(pondId, userId);
 
@@ -72,6 +180,34 @@ export class DashboardService {
 
     const distance = value < min ? min - value : value - max;
     return Math.min(25, distance * 10 * weight);
+  }
+
+  private resolveScoreLevel(score: number | null) {
+    if (score == null) {
+      return 'unknown';
+    }
+
+    if (score >= 85) {
+      return 'excellent';
+    }
+
+    if (score >= 70) {
+      return 'good';
+    }
+
+    if (score >= 50) {
+      return 'fair';
+    }
+
+    return 'poor';
+  }
+
+  private isDeviceOnlineByHeartbeat(lastTelemetryAt: Date | null): boolean {
+    if (!lastTelemetryAt) {
+      return false;
+    }
+
+    return Date.now() - lastTelemetryAt.getTime() <= 2 * 60 * 1000;
   }
 
   private async assertPondOwnership(pondId: string, userId: string) {

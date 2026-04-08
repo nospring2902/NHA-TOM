@@ -25,11 +25,17 @@ PORT=3000
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nhatom?schema=public"
 JWT_ACCESS_SECRET=replace_with_strong_secret
 JWT_ACCESS_EXPIRES_IN=15m
+THINGSBOARD_BASE_URL=http://localhost:8080
+THINGSBOARD_USERNAME=tenant@thingsboard.org
+THINGSBOARD_PASSWORD=tenant
+DEVICE_TOKEN_ENCRYPTION_KEY=replace_with_long_random_secret
+ADMIN_BOOTSTRAP_KEY=replace_with_admin_bootstrap_key
 ```
 
 Khuyen nghi:
 - JWT_ACCESS_SECRET dai >= 32 ky tu.
 - Moi moi truong (local/staging/prod) dung secret rieng.
+- Device token ThingsBoard duoc ma hoa bang `DEVICE_TOKEN_ENCRYPTION_KEY` truoc khi luu DB.
 
 ## 3) Trinh tu chay local (end-to-end)
 

@@ -1,7 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, User, Bell, MessageCircle, Droplets } from "lucide-react";
+import { Home, User, Bell, MessageCircle, Droplets, Cpu } from "lucide-react";
+import { getAuthSession } from "@/lib/auth";
 
-const navItems = [
+const baseNavItems = [
   { to: "/home", icon: Home, label: "Trang chủ" },
   { to: "/notifications", icon: Bell, label: "Thông báo" },
   { to: "/chat", icon: MessageCircle, label: "Tin nhắn" },
@@ -10,6 +11,11 @@ const navItems = [
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { pathname } = useLocation();
+  const session = getAuthSession();
+  const navItems =
+    session?.user.role === "ADMIN"
+      ? [...baseNavItems, { to: "/admin/devices", icon: Cpu, label: "Admin Devices" }]
+      : baseNavItems;
 
   return (
     <div className="min-h-screen bg-background">
