@@ -3,7 +3,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import { TelemetryIngestDto } from './dto/telemetry-ingest.dto';
 import { TelemetryService } from './telemetry.service';
 
-@Controller('api/v1/telemetry')
+@Controller(['api/v1/telemetry', 'telemetry'])
 export class TelemetryController {
   constructor(private readonly telemetryService: TelemetryService) {}
 

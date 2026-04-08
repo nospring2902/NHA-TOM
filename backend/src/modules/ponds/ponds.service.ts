@@ -168,9 +168,109 @@ export class PondsService {
 
   async bindDevice(pondId: string, userId: string, payload: BindDeviceDto) {
     await this.findOwnedPondOrThrow(pondId, userId);
-    await this.seedInventoryIfEmpty();
 
     const serialNumber = payload.serialNumber.toUpperCase();
+
+    const provisionedDevice = await this.prisma.device.findUnique({
+      where: {
+        serialNumber,
+      },
+      select: {
+        id: true,
+        serialNumber: true,
+        model: true,
+        type: true,
+        status: true,
+        telemetryPackets: true,
+        lastTelemetryAt: true,
+        ownerId: true,
+        createdAt: true,
+      },
+    });
+
+    if (provisionedDevice) {
+      const boundDevice = await this.prisma.$transaction(async (tx) => {
+        const activeBinding = await tx.pondDevice.findFirst({
+          where: {
+            deviceId: provisionedDevice.id,
+            unboundAt: null,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (activeBinding) {
+          throw new ConflictException('Mã này đã được sử dụng');
+        }
+
+        if (provisionedDevice.ownerId && provisionedDevice.ownerId !== userId) {
+          throw new ConflictException('Mã này đã được sử dụng');
+        }
+
+        const activeBindingCount = await tx.pondDevice.count({
+          where: {
+            pondId,
+            unboundAt: null,
+          },
+        });
+
+        const updatedDevice = await tx.device.update({
+          where: {
+            id: provisionedDevice.id,
+          },
+          data: {
+            ownerId: userId,
+            status: DeviceStatus.WAITING_SIGNAL,
+          },
+        });
+
+        const binding = await tx.pondDevice.create({
+          data: {
+            pondId,
+            deviceId: updatedDevice.id,
+            isPrimary: activeBindingCount === 0,
+          },
+        });
+
+        await tx.activityLog.create({
+          data: {
+            pondId,
+            actorUserId: userId,
+            actorType: 'user',
+            action: 'DEVICE_BOUND',
+            trigger: 'manual',
+            metadata: {
+              serialNumber,
+              deviceId: updatedDevice.id,
+            },
+          },
+        });
+
+        return {
+          device: updatedDevice,
+          boundAt: binding.boundAt,
+        };
+      });
+
+      return {
+        success: true,
+        message: 'Kết nối thiết bị thành công, đang chờ tín hiệu đầu tiên',
+        data: {
+          id: boundDevice.device.id,
+          pondId,
+          serialNumber: boundDevice.device.serialNumber,
+          model: boundDevice.device.model,
+          type: DEVICE_TYPE_FROM_PRISMA[boundDevice.device.type],
+          status: boundDevice.device.status,
+          telemetryPackets: boundDevice.device.telemetryPackets,
+          boundAt: boundDevice.boundAt,
+          lastTelemetryAt: boundDevice.device.lastTelemetryAt,
+        },
+      };
+    }
+
+    await this.seedInventoryIfEmpty();
 
     const inventoryRecord = await this.prisma.deviceInventory.findUnique({
       where: {
@@ -210,6 +310,7 @@ export class PondsService {
       const device = await tx.device.create({
         data: {
           serialNumber,
+          ownerId: userId,
           model: inventoryRecord.model,
           type: inventoryRecord.type,
           status: DeviceStatus.WAITING_SIGNAL,
@@ -290,7 +391,11 @@ export class PondsService {
     }
 
     const { device } = pondDevice;
-    const isOnline = device.status === DeviceStatus.ONLINE;
+    const lastTelemetryAgeMs = device.lastTelemetryAt
+      ? Date.now() - device.lastTelemetryAt.getTime()
+      : Number.POSITIVE_INFINITY;
+    const isOnline = lastTelemetryAgeMs <= 2 * 60 * 1000;
+    const status = isOnline ? DeviceStatus.ONLINE : DeviceStatus.WAITING_SIGNAL;
 
     return {
       success: true,
@@ -300,7 +405,7 @@ export class PondsService {
       data: {
         deviceId: device.id,
         serialNumber: device.serialNumber,
-        status: device.status,
+        status,
         isOnline,
         telemetryPackets: device.telemetryPackets,
         lastTelemetryAt: device.lastTelemetryAt,

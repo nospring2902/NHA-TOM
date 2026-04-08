@@ -15,4 +15,10 @@ export class DashboardController {
     const userId = this.authContextService.requireCurrentUserId(req);
     return this.dashboardService.score(pondId, userId);
   }
+
+  @Get('realtime')
+  realtime(@Param('pondId') pondId: string, @Req() req: Request) {
+    const userId = this.authContextService.requireCurrentUserId(req);
+    return this.dashboardService.realtime(pondId, userId);
+  }
 }

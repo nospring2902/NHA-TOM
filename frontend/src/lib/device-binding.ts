@@ -16,7 +16,13 @@ export type BoundDevice = {
   serialNumber: string;
   model: string;
   type: string;
-  status: "WAITING_SIGNAL" | "ONLINE";
+  status:
+    | "INACTIVE"
+    | "WAITING_SIGNAL"
+    | "ONLINE"
+    | "OFFLINE"
+    | "ERROR"
+    | "MAINTENANCE";
   telemetryPackets: number;
   boundAt: string;
   lastTelemetryAt: string | null;

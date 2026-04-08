@@ -6,18 +6,41 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { MetricQualityFlag, Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../database/prisma.service';
+import { DeviceTokenCipherService } from '../devices/device-token-cipher.service';
 import { TelemetryIngestDto } from './dto/telemetry-ingest.dto';
+
+type NormalizedTelemetryPayload = {
+  eventId?: string;
+  timestamp?: string;
+  deviceId?: string;
+  deviceToken?: string;
+  serialNumber?: string;
+  tbDeviceId?: string;
+  thingsboardDeviceId?: string;
+  metrics?: {
+    ph?: number;
+    dissolvedOxygen?: number;
+    temperature?: number;
+    salinity?: number;
+  };
+  payload?: Record<string, unknown>;
+};
 
 @Injectable()
 export class TelemetryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tokenCipherService: DeviceTokenCipherService,
+  ) {}
 
   async ingest(payload: TelemetryIngestDto, ingestTokenHeader?: string) {
     this.assertIngestToken(ingestTokenHeader);
 
     try {
-      const device = await this.resolveDevice(payload);
+      const normalizedPayload = this.normalizePayload(payload);
+      const device = await this.resolveDevice(normalizedPayload);
       const activeBinding = await this.prisma.pondDevice.findFirst({
         where: {
           deviceId: device.id,
@@ -28,85 +51,35 @@ export class TelemetryService {
         },
       });
 
-      if (!activeBinding) {
-        throw new BadRequestException('Thiết bị chưa được bind với ao nào');
-      }
-
-      if (!device.isActive) {
-        throw new BadRequestException(
-          'Thiết bị chưa được bật (ACTIVE). Không cho phép ingest telemetry để tránh rác DB.',
-        );
-      }
-
-      const pondId = activeBinding.pondId;
-      const measuredAt = payload.timestamp ? new Date(payload.timestamp) : new Date();
+      const pondId = activeBinding?.pondId ?? null;
+      const measuredAt = normalizedPayload.timestamp
+        ? new Date(normalizedPayload.timestamp)
+        : new Date();
       if (Number.isNaN(measuredAt.getTime())) {
         throw new BadRequestException('timestamp không hợp lệ');
       }
 
-      const metrics = payload.metrics ?? {};
+      const metrics = normalizedPayload.metrics ?? {};
+      const eventId = normalizedPayload.eventId?.trim() || this.generateEventId(device.id);
 
       const ingestResult = await this.prisma.$transaction(async (tx) => {
-        const existingEvent = await tx.telemetryRaw.findUnique({
-          where: {
-            eventId: payload.eventId,
-          },
-          select: {
-            id: true,
-          },
-        });
+        if (normalizedPayload.eventId) {
+          const existingEvent = await tx.telemetryRaw.findUnique({
+            where: {
+              eventId,
+            },
+            select: {
+              id: true,
+            },
+          });
 
-        if (existingEvent) {
-          return {
-            duplicate: true,
-          };
+          if (existingEvent) {
+            return {
+              duplicate: true,
+              pondId,
+            };
+          }
         }
-
-        await tx.telemetryRaw.create({
-          data: {
-            eventId: payload.eventId,
-            pondId,
-            deviceId: device.id,
-            tsUtc: measuredAt,
-            payload: this.toPrismaJsonValue(payload.payload ?? this.toFallbackPayload(payload)),
-            source: 'thingsboard',
-            ingestStatus: 'accepted',
-          },
-        });
-
-        await tx.pondMetricSnapshot.create({
-          data: {
-            pondId,
-            deviceId: device.id,
-            tsUtc: measuredAt,
-            ph: metrics.ph,
-            dissolvedOxygen: metrics.dissolvedOxygen,
-            temperature: metrics.temperature,
-            salinity: metrics.salinity,
-            qualityFlag: MetricQualityFlag.VALID,
-          },
-        });
-
-        await tx.pondMetricLatest.upsert({
-          where: {
-            pondId,
-          },
-          create: {
-            pondId,
-            ph: metrics.ph,
-            dissolvedOxygen: metrics.dissolvedOxygen,
-            temperature: metrics.temperature,
-            salinity: metrics.salinity,
-            updatedAt: measuredAt,
-          },
-          update: {
-            ph: metrics.ph,
-            dissolvedOxygen: metrics.dissolvedOxygen,
-            temperature: metrics.temperature,
-            salinity: metrics.salinity,
-            updatedAt: measuredAt,
-          },
-        });
 
         await tx.device.update({
           where: {
@@ -114,29 +87,96 @@ export class TelemetryService {
           },
           data: {
             status: 'ONLINE',
+            isActive: true,
             lastTelemetryAt: measuredAt,
             telemetryPackets: {
               increment: 1,
             },
-            thingsboardDeviceId: payload.thingsboardDeviceId ?? device.thingsboardDeviceId,
+            tbDeviceId:
+              normalizedPayload.tbDeviceId ??
+              normalizedPayload.thingsboardDeviceId ??
+              device.tbDeviceId,
           },
         });
 
-        await tx.activityLog.create({
-          data: {
-            pondId,
-            actorType: 'system',
-            action: 'TELEMETRY_INGESTED',
-            trigger: 'thingsboard_webhook',
-            metadata: {
+        if (pondId) {
+          await tx.telemetryRaw.create({
+            data: {
+              eventId,
+              pondId,
               deviceId: device.id,
-              eventId: payload.eventId,
+              tsUtc: measuredAt,
+              payload: this.toPrismaJsonValue(
+                normalizedPayload.payload ?? this.toFallbackPayload(normalizedPayload),
+              ),
+              source: 'thingsboard',
+              ingestStatus: 'accepted',
             },
-          },
-        });
+          });
+
+          await tx.pondMetricSnapshot.create({
+            data: {
+              pondId,
+              deviceId: device.id,
+              tsUtc: measuredAt,
+              ph: metrics.ph,
+              dissolvedOxygen: metrics.dissolvedOxygen,
+              temperature: metrics.temperature,
+              salinity: metrics.salinity,
+              qualityFlag: MetricQualityFlag.VALID,
+            },
+          });
+
+          await tx.pondMetricLatest.upsert({
+            where: {
+              pondId,
+            },
+            create: {
+              pondId,
+              ph: metrics.ph,
+              dissolvedOxygen: metrics.dissolvedOxygen,
+              temperature: metrics.temperature,
+              salinity: metrics.salinity,
+              updatedAt: measuredAt,
+            },
+            update: {
+              ph: metrics.ph,
+              dissolvedOxygen: metrics.dissolvedOxygen,
+              temperature: metrics.temperature,
+              salinity: metrics.salinity,
+              updatedAt: measuredAt,
+            },
+          });
+
+          await tx.activityLog.create({
+            data: {
+              pondId,
+              actorType: 'system',
+              action: 'TELEMETRY_INGESTED',
+              trigger: 'thingsboard_webhook',
+              metadata: {
+                deviceId: device.id,
+                eventId,
+              },
+            },
+          });
+        } else {
+          await tx.activityLog.create({
+            data: {
+              actorType: 'system',
+              action: 'TELEMETRY_RECEIVED_UNBOUND',
+              trigger: 'thingsboard_webhook',
+              metadata: {
+                deviceId: device.id,
+                eventId,
+              },
+            },
+          });
+        }
 
         return {
           duplicate: false,
+          pondId,
         };
       });
 
@@ -144,13 +184,16 @@ export class TelemetryService {
         success: true,
         message: ingestResult.duplicate
           ? 'Telemetry event đã tồn tại, bỏ qua bản ghi trùng'
-          : 'Telemetry đã được ingest thành công',
+          : ingestResult.pondId
+            ? 'Telemetry đã được ingest thành công'
+            : 'Thiết bị đã gửi telemetry nhưng chưa bind với ao nào',
         data: {
-          eventId: payload.eventId,
+          eventId,
           deviceId: device.id,
-          pondId,
+          pondId: ingestResult.pondId,
           duplicate: ingestResult.duplicate,
           measuredAt,
+          boundToPond: Boolean(ingestResult.pondId),
         },
       };
     } catch (error) {
@@ -178,14 +221,60 @@ export class TelemetryService {
     }
   }
 
-  private toFallbackPayload(payload: TelemetryIngestDto): Record<string, unknown> {
+  private normalizePayload(payload: TelemetryIngestDto): NormalizedTelemetryPayload {
+    const customPayload = this.asRecord(payload.payload);
+
+    const metrics = {
+      ph: this.resolveNumber(payload.metrics?.ph, payload.ph, customPayload.ph),
+      dissolvedOxygen: this.resolveNumber(
+        payload.metrics?.dissolvedOxygen,
+        payload.dissolvedOxygen,
+        payload.dissolved_oxygen,
+        customPayload.dissolvedOxygen,
+        customPayload.dissolved_oxygen,
+      ),
+      temperature: this.resolveNumber(
+        payload.metrics?.temperature,
+        payload.temperature,
+        customPayload.temperature,
+      ),
+      salinity: this.resolveNumber(
+        payload.metrics?.salinity,
+        payload.salinity,
+        customPayload.salinity,
+      ),
+    };
+
+    return {
+      eventId: payload.eventId?.trim() || this.resolveString(customPayload.eventId),
+      timestamp: payload.timestamp ?? this.resolveString(customPayload.timestamp),
+      deviceId: payload.deviceId ?? this.resolveString(customPayload.deviceId),
+      deviceToken: payload.deviceToken ?? this.resolveString(customPayload.deviceToken),
+      serialNumber: payload.serialNumber ?? this.resolveString(customPayload.serialNumber),
+      tbDeviceId: payload.tbDeviceId ?? this.resolveString(customPayload.tbDeviceId),
+      thingsboardDeviceId:
+        payload.thingsboardDeviceId ?? this.resolveString(customPayload.thingsboardDeviceId),
+      metrics,
+      payload: payload.payload,
+    };
+  }
+
+  private toFallbackPayload(payload: NormalizedTelemetryPayload): Record<string, unknown> {
     return {
       eventId: payload.eventId,
       deviceId: payload.deviceId ?? null,
+      deviceToken: payload.deviceToken ?? null,
       serialNumber: payload.serialNumber ?? null,
-      thingsboardDeviceId: payload.thingsboardDeviceId ?? null,
+      tbDeviceId: payload.tbDeviceId ?? payload.thingsboardDeviceId ?? null,
       timestamp: payload.timestamp ?? null,
-      metrics: payload.metrics ?? null,
+      metrics: payload.metrics
+        ? {
+            ph: payload.metrics.ph ?? null,
+            dissolved_oxygen: payload.metrics.dissolvedOxygen ?? null,
+            temperature: payload.metrics.temperature ?? null,
+            salinity: payload.metrics.salinity ?? null,
+          }
+        : null,
     };
   }
 
@@ -197,16 +286,56 @@ export class TelemetryService {
     }
   }
 
-  private async resolveDevice(payload: TelemetryIngestDto) {
+  private async resolveDevice(payload: NormalizedTelemetryPayload) {
+    const deviceToken = payload.deviceToken?.trim();
+    const tbDeviceId = payload.tbDeviceId?.trim() ?? payload.thingsboardDeviceId?.trim();
+
+    if (deviceToken) {
+      const tokenCandidates = await this.prisma.device.findMany({
+        where: {
+          accessToken: {
+            not: null,
+          },
+        },
+        select: {
+          id: true,
+          serialNumber: true,
+          tbDeviceId: true,
+          isActive: true,
+          accessToken: true,
+        },
+      });
+
+      for (const tokenCandidate of tokenCandidates) {
+        if (!tokenCandidate.accessToken) {
+          continue;
+        }
+
+        try {
+          const decrypted = this.tokenCipherService.decrypt(tokenCandidate.accessToken);
+          if (decrypted === deviceToken) {
+            return {
+              id: tokenCandidate.id,
+              serialNumber: tokenCandidate.serialNumber,
+              tbDeviceId: tokenCandidate.tbDeviceId,
+              isActive: tokenCandidate.isActive,
+            };
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+
     const identifiers = [
       payload.deviceId?.trim(),
       payload.serialNumber?.trim().toUpperCase(),
-      payload.thingsboardDeviceId?.trim(),
+      tbDeviceId,
     ].filter(Boolean);
 
     if (identifiers.length === 0) {
       throw new BadRequestException(
-        'Yêu cầu phải có ít nhất một định danh thiết bị: deviceId, serialNumber hoặc thingsboardDeviceId',
+        'Yêu cầu phải có ít nhất một định danh thiết bị: deviceToken, deviceId, serialNumber hoặc tbDeviceId',
       );
     }
 
@@ -217,15 +346,13 @@ export class TelemetryService {
           payload.serialNumber
             ? { serialNumber: payload.serialNumber.trim().toUpperCase() }
             : undefined,
-          payload.thingsboardDeviceId
-            ? { thingsboardDeviceId: payload.thingsboardDeviceId.trim() }
-            : undefined,
+          tbDeviceId ? { tbDeviceId } : undefined,
         ].filter((item) => item !== undefined),
       },
       select: {
         id: true,
         serialNumber: true,
-        thingsboardDeviceId: true,
+        tbDeviceId: true,
         isActive: true,
       },
     });
@@ -235,5 +362,43 @@ export class TelemetryService {
     }
 
     return device;
+  }
+
+  private resolveString(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private resolveNumber(...candidates: unknown[]): number | undefined {
+    for (const candidate of candidates) {
+      if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+        return candidate;
+      }
+
+      if (typeof candidate === 'string') {
+        const parsed = Number(candidate);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+
+    return value as Record<string, unknown>;
+  }
+
+  private generateEventId(deviceId: string): string {
+    return `tb-${deviceId}-${randomUUID()}`;
   }
 }

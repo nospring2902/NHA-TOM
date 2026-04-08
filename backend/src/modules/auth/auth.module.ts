@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { AdminSeedService } from './admin-seed.service';
 import { AuthContextService } from './auth-context.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -13,6 +14,7 @@ import { TokenService } from './token.service';
     AuthService,
     TokenService,
     AuthContextService,
+    AdminSeedService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

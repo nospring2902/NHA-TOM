@@ -53,7 +53,7 @@ const LoginPage = () => {
         title: "Đăng nhập thành công",
         description: `Xin chào ${response.data.data.user.fullName}`,
       });
-      navigate("/home");
+      navigate(response.data.data.user.role === "ADMIN" ? "/admin/devices" : "/home");
     } catch (error) {
       const message = getApiErrorMessage(error, "Đăng nhập thất bại");
       setErrorMessage(message);
