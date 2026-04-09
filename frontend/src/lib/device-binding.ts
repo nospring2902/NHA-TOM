@@ -31,7 +31,7 @@ export type BoundDevice = {
 export type TelemetryStatus = {
   deviceId: string;
   serialNumber: string;
-  status: "WAITING_SIGNAL" | "ONLINE";
+  status: "WAITING_SIGNAL" | "ONLINE" | "OFFLINE";
   isOnline: boolean;
   telemetryPackets: number;
   lastTelemetryAt: string | null;

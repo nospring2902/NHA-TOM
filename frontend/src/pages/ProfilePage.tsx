@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Grid3x3, Waves, Settings, MapPin } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AddPondModal } from "@/components/AddPondModal";
 import { DeviceSignalStatus } from "@/components/DeviceSignalStatus";
-import { BoundDevice, CreatePondAndBindResult } from "@/lib/device-binding";
+import { BoundDevice, CreatePondAndBindResult, getTelemetryStatus } from "@/lib/device-binding";
+import { type RealtimeSignalStatus } from "@/lib/device-status";
 import AppLayout from "@/components/AppLayout";
 
 const userPosts = [
@@ -23,7 +24,7 @@ const userPonds = [
   { id: 3, name: "Ao Tôm B1", area: "3,000 m²", location: "Bạc Liêu" },
 ];
 
-type PondSetupStatus = "READY" | "WAITING_SIGNAL" | "ONLINE";
+type PondSetupStatus = "READY" | RealtimeSignalStatus;
 
 type ProfilePond = {
   id: string;
@@ -47,6 +48,10 @@ const statusUi: Record<PondSetupStatus, { label: string; className: string }> = 
     label: "Đã trực tuyến",
     className: "bg-aqua-light text-aqua",
   },
+  OFFLINE: {
+    label: "Mất tín hiệu",
+    className: "bg-destructive/10 text-destructive",
+  },
 };
 
 const ProfilePage = () => {
@@ -60,6 +65,123 @@ const ProfilePage = () => {
       status: "READY",
     })),
   );
+
+  const telemetryTargets = useMemo(() => {
+    return ponds
+      .filter((pond) => Boolean(pond.boundDevice))
+      .map((pond) => ({
+        pondId: pond.id,
+        deviceId: pond.boundDevice!.id,
+      }));
+  }, [ponds]);
+
+  const telemetryTargetKey = useMemo(() => {
+    return telemetryTargets
+      .map((item) => `${item.pondId}:${item.deviceId}`)
+      .sort()
+      .join("|");
+  }, [telemetryTargets]);
+
+  useEffect(() => {
+    if (telemetryTargets.length === 0) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const pollTelemetryStatus = async () => {
+      const results = await Promise.allSettled(
+        telemetryTargets.map(async (target) => {
+          const result = await getTelemetryStatus(target.pondId, target.deviceId);
+          return {
+            pondId: target.pondId,
+            deviceId: target.deviceId,
+            status: result.data.status,
+            telemetryPackets: result.data.telemetryPackets,
+            lastTelemetryAt: result.data.lastTelemetryAt,
+          };
+        }),
+      );
+
+      if (!isMounted) {
+        return;
+      }
+
+      const statusByTarget = new Map<
+        string,
+        {
+          status: BoundDevice["status"];
+          telemetryPackets: number;
+          lastTelemetryAt: string | null;
+        }
+      >();
+
+      for (const result of results) {
+        if (result.status !== "fulfilled") {
+          continue;
+        }
+
+        const key = `${result.value.pondId}:${result.value.deviceId}`;
+        statusByTarget.set(key, {
+          status: result.value.status,
+          telemetryPackets: result.value.telemetryPackets,
+          lastTelemetryAt: result.value.lastTelemetryAt,
+        });
+      }
+
+      if (statusByTarget.size === 0) {
+        return;
+      }
+
+      setPonds((current) => {
+        let hasChanges = false;
+
+        const next = current.map((item) => {
+          if (!item.boundDevice) {
+            return item;
+          }
+
+          const key = `${item.id}:${item.boundDevice.id}`;
+          const nextStatus = statusByTarget.get(key);
+          if (!nextStatus) {
+            return item;
+          }
+
+          const isBoundDeviceChanged =
+            item.boundDevice.status !== nextStatus.status ||
+            item.boundDevice.telemetryPackets !== nextStatus.telemetryPackets ||
+            item.boundDevice.lastTelemetryAt !== nextStatus.lastTelemetryAt;
+
+          if (!isBoundDeviceChanged) {
+            return item;
+          }
+
+          hasChanges = true;
+          return {
+            ...item,
+            boundDevice: {
+              ...item.boundDevice,
+              status: nextStatus.status,
+              telemetryPackets: nextStatus.telemetryPackets,
+              lastTelemetryAt: nextStatus.lastTelemetryAt,
+            },
+          };
+        });
+
+        return hasChanges ? next : current;
+      });
+    };
+
+    void pollTelemetryStatus();
+    const timer = window.setInterval(() => {
+      void pollTelemetryStatus();
+    }, 10000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(timer);
+    };
+  }, [telemetryTargetKey, telemetryTargets]);
 
   const handlePondCreated = (result: CreatePondAndBindResult) => {
     setPonds((current) => {
@@ -78,7 +200,7 @@ const ProfilePage = () => {
     });
   };
 
-  const handleSignalStatusChange = (pondId: string, isOnline: boolean) => {
+  const handleSignalStatusChange = (pondId: string, signalStatus: RealtimeSignalStatus) => {
     setPonds((current) => {
       return current.map((item) => {
         if (item.id !== pondId) {
@@ -89,9 +211,13 @@ const ProfilePage = () => {
           return item;
         }
 
+        if (item.status === signalStatus) {
+          return item;
+        }
+
         return {
           ...item,
-          status: isOnline ? "ONLINE" : "WAITING_SIGNAL",
+          status: signalStatus,
         };
       });
     });
@@ -198,9 +324,8 @@ const ProfilePage = () => {
                           <p className="text-[11px] text-muted-foreground">Serial: {pond.boundDevice.serialNumber}</p>
                         </div>
                         <DeviceSignalStatus
-                          pondId={pond.id}
-                          deviceId={pond.boundDevice.id}
-                          onStatusChange={(isOnline) => handleSignalStatusChange(pond.id, isOnline)}
+                          lastTelemetryAt={pond.boundDevice.lastTelemetryAt}
+                          onStatusChange={(signalStatus) => handleSignalStatusChange(pond.id, signalStatus)}
                         />
                       </div>
                     </div>

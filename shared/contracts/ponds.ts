@@ -62,7 +62,7 @@ export type BoundDevice = {
   serialNumber: string;
   model: string;
   type: string;
-  status: 'WAITING_SIGNAL' | 'ONLINE';
+  status: 'WAITING_SIGNAL' | 'ONLINE' | 'OFFLINE';
   telemetryPackets: number;
   boundAt: string;
   lastTelemetryAt: string | null;
@@ -71,7 +71,7 @@ export type BoundDevice = {
 export type DeviceTelemetryStatus = {
   deviceId: string;
   serialNumber: string;
-  status: 'WAITING_SIGNAL' | 'ONLINE';
+  status: 'WAITING_SIGNAL' | 'ONLINE' | 'OFFLINE';
   isOnline: boolean;
   telemetryPackets: number;
   lastTelemetryAt: string | null;

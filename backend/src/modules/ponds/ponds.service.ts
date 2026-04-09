@@ -391,17 +391,24 @@ export class PondsService {
     }
 
     const { device } = pondDevice;
+    const hasTelemetry = Boolean(device.lastTelemetryAt);
     const lastTelemetryAgeMs = device.lastTelemetryAt
       ? Date.now() - device.lastTelemetryAt.getTime()
       : Number.POSITIVE_INFINITY;
     const isOnline = lastTelemetryAgeMs <= 2 * 60 * 1000;
-    const status = isOnline ? DeviceStatus.ONLINE : DeviceStatus.WAITING_SIGNAL;
+    const status = isOnline
+      ? DeviceStatus.ONLINE
+      : hasTelemetry
+        ? DeviceStatus.OFFLINE
+        : DeviceStatus.WAITING_SIGNAL;
 
     return {
       success: true,
       message: isOnline
         ? 'Thiết bị đã gửi telemetry và đang trực tuyến'
-        : 'Đang đợi tín hiệu từ thiết bị...',
+        : hasTelemetry
+          ? 'Thiết bị đã mất tín hiệu (quá 2 phút không nhận telemetry mới)'
+          : 'Đang đợi tín hiệu từ thiết bị...',
       data: {
         deviceId: device.id,
         serialNumber: device.serialNumber,

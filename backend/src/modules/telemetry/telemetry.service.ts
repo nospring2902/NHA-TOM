@@ -5,11 +5,12 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { MetricQualityFlag, Prisma } from '@prisma/client';
+import { DeviceStatus, MetricQualityFlag, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../database/prisma.service';
 import { DeviceTokenCipherService } from '../devices/device-token-cipher.service';
 import { TelemetryIngestDto } from './dto/telemetry-ingest.dto';
+import { TelemetryStatusChangeDto } from './dto/telemetry-status-change.dto';
 
 type NormalizedTelemetryPayload = {
   eventId?: string;
@@ -26,6 +27,14 @@ type NormalizedTelemetryPayload = {
     salinity?: number;
   };
   payload?: Record<string, unknown>;
+};
+
+type NormalizedStatusChangePayload = {
+  deviceId?: string;
+  serialNumber?: string;
+  tbDeviceId?: string;
+  status?: string;
+  active?: boolean;
 };
 
 @Injectable()
@@ -52,6 +61,7 @@ export class TelemetryService {
       });
 
       const pondId = activeBinding?.pondId ?? null;
+      const receivedAt = new Date();
       const measuredAt = normalizedPayload.timestamp
         ? new Date(normalizedPayload.timestamp)
         : new Date();
@@ -88,7 +98,7 @@ export class TelemetryService {
           data: {
             status: 'ONLINE',
             isActive: true,
-            lastTelemetryAt: measuredAt,
+            lastTelemetryAt: receivedAt,
             telemetryPackets: {
               increment: 1,
             },
@@ -209,6 +219,74 @@ export class TelemetryService {
     }
   }
 
+  async handleStatusChange(payload: TelemetryStatusChangeDto, statusChangeTokenHeader?: string) {
+    this.assertStatusChangeToken(statusChangeTokenHeader);
+
+    try {
+      const normalizedPayload = this.normalizeStatusChangePayload(payload);
+      const device = await this.resolveDeviceForStatusChange(normalizedPayload);
+      const status = this.resolveStatusFromStatusChangePayload(normalizedPayload);
+      const isActive =
+        normalizedPayload.active ??
+        (status === DeviceStatus.ONLINE
+          ? true
+          : status === DeviceStatus.OFFLINE
+            ? false
+            : device.isActive);
+
+      const updated = await this.prisma.device.update({
+        where: {
+          id: device.id,
+        },
+        data: {
+          status,
+          isActive,
+        },
+        select: {
+          id: true,
+          serialNumber: true,
+          tbDeviceId: true,
+          status: true,
+          isActive: true,
+          lastTelemetryAt: true,
+          updatedAt: true,
+        },
+      });
+
+      await this.prisma.activityLog.create({
+        data: {
+          actorType: 'system',
+          action: 'DEVICE_STATUS_UPDATED_FROM_WEBHOOK',
+          trigger: 'thingsboard_status_change',
+          metadata: {
+            deviceId: updated.id,
+            inputStatus: normalizedPayload.status ?? null,
+            inputActive: normalizedPayload.active ?? null,
+            resolvedStatus: updated.status,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Đã cập nhật trạng thái thiết bị từ webhook',
+        data: updated,
+      };
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Không thể xử lý webhook đổi trạng thái thiết bị, vui lòng thử lại',
+      );
+    }
+  }
+
   private assertIngestToken(ingestTokenHeader?: string) {
     const expectedToken = process.env.THINGSBOARD_INGEST_TOKEN;
 
@@ -218,6 +296,19 @@ export class TelemetryService {
 
     if (!ingestTokenHeader || ingestTokenHeader !== expectedToken) {
       throw new UnauthorizedException('x-ingest-token không hợp lệ');
+    }
+  }
+
+  private assertStatusChangeToken(statusChangeTokenHeader?: string) {
+    const expectedToken =
+      process.env.THINGSBOARD_STATUS_CHANGE_TOKEN ?? process.env.THINGSBOARD_INGEST_TOKEN;
+
+    if (!expectedToken) {
+      return;
+    }
+
+    if (!statusChangeTokenHeader || statusChangeTokenHeader !== expectedToken) {
+      throw new UnauthorizedException('x-ingest-token không hợp lệ cho status-change webhook');
     }
   }
 
@@ -257,6 +348,104 @@ export class TelemetryService {
       metrics,
       payload: payload.payload,
     };
+  }
+
+  private normalizeStatusChangePayload(
+    payload: TelemetryStatusChangeDto,
+  ): NormalizedStatusChangePayload {
+    const customPayload = this.asRecord(payload.payload);
+
+    return {
+      deviceId: payload.deviceId ?? this.resolveString(customPayload.deviceId),
+      serialNumber:
+        payload.serialNumber ?? this.resolveString(customPayload.serialNumber)?.toUpperCase(),
+      tbDeviceId:
+        payload.tbDeviceId ??
+        payload.thingsboardDeviceId ??
+        this.resolveString(customPayload.tbDeviceId) ??
+        this.resolveString(customPayload.thingsboardDeviceId),
+      status: payload.status ?? this.resolveString(customPayload.status),
+      active:
+        payload.active ??
+        this.resolveBoolean(customPayload.active) ??
+        this.resolveBoolean(customPayload.isActive),
+    };
+  }
+
+  private async resolveDeviceForStatusChange(payload: NormalizedStatusChangePayload) {
+    const serializedNumber = payload.serialNumber?.trim().toUpperCase();
+    const deviceIdCandidate = payload.deviceId?.trim();
+    const tbDeviceIdCandidate = payload.tbDeviceId?.trim();
+
+    const identifiers = [serializedNumber, deviceIdCandidate, tbDeviceIdCandidate].filter(Boolean);
+    if (identifiers.length === 0) {
+      throw new BadRequestException(
+        'Webhook status-change phải có deviceId, tbDeviceId/thingsboardDeviceId hoặc serialNumber',
+      );
+    }
+
+    const device = await this.prisma.device.findFirst({
+      where: {
+        OR: [
+          deviceIdCandidate ? { id: deviceIdCandidate } : undefined,
+          tbDeviceIdCandidate ? { tbDeviceId: tbDeviceIdCandidate } : undefined,
+          deviceIdCandidate ? { tbDeviceId: deviceIdCandidate } : undefined,
+          serializedNumber ? { serialNumber: serializedNumber } : undefined,
+        ].filter((item) => item !== undefined),
+      },
+      select: {
+        id: true,
+        serialNumber: true,
+        tbDeviceId: true,
+        isActive: true,
+      },
+    });
+
+    if (!device) {
+      throw new NotFoundException('Không tìm thấy thiết bị cần cập nhật trạng thái');
+    }
+
+    return device;
+  }
+
+  private resolveStatusFromStatusChangePayload(payload: NormalizedStatusChangePayload): DeviceStatus {
+    const normalizedStatus = payload.status?.trim().toUpperCase();
+
+    if (normalizedStatus === 'ACTIVE' || normalizedStatus === 'ONLINE') {
+      return DeviceStatus.ONLINE;
+    }
+
+    if (
+      normalizedStatus === 'INACTIVE' ||
+      normalizedStatus === 'OFFLINE' ||
+      normalizedStatus === 'UNPLUGGED'
+    ) {
+      return DeviceStatus.OFFLINE;
+    }
+
+    if (normalizedStatus === 'WAITING_SIGNAL') {
+      return DeviceStatus.WAITING_SIGNAL;
+    }
+
+    if (normalizedStatus === 'ERROR') {
+      return DeviceStatus.ERROR;
+    }
+
+    if (normalizedStatus === 'MAINTENANCE') {
+      return DeviceStatus.MAINTENANCE;
+    }
+
+    if (payload.active === true) {
+      return DeviceStatus.ONLINE;
+    }
+
+    if (payload.active === false) {
+      return DeviceStatus.OFFLINE;
+    }
+
+    throw new BadRequestException(
+      'Webhook status-change phải gửi status hợp lệ hoặc cờ active (true/false)',
+    );
   }
 
   private toFallbackPayload(payload: NormalizedTelemetryPayload): Record<string, unknown> {
@@ -371,6 +560,27 @@ export class TelemetryService {
 
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private resolveBoolean(value: unknown): boolean | undefined {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') {
+      return true;
+    }
+
+    if (normalized === 'false') {
+      return false;
+    }
+
+    return undefined;
   }
 
   private resolveNumber(...candidates: unknown[]): number | undefined {
