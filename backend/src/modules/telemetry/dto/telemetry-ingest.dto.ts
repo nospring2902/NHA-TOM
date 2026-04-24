@@ -31,6 +31,18 @@ export class TelemetryMetricsDto {
   salinity?: number;
 }
 
+export class TelemetryGeoDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  lat?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  lng?: number;
+}
+
 export class TelemetryIngestDto {
   @IsOptional()
   @IsString()
@@ -90,6 +102,36 @@ export class TelemetryIngestDto {
   @Type(() => Number)
   @IsNumber()
   salinity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  latitude?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  longitude?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  lat?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  lng?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  lon?: number;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => TelemetryGeoDto)
+  geo?: TelemetryGeoDto;
 
   @IsOptional()
   @IsObject()

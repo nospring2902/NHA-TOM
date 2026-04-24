@@ -47,6 +47,9 @@ export type Pond = {
   ward: string;
   areaM2: number;
   averageDepthM: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  geo?: GeoPoint | null;
   waterType: PondWaterType;
   lifecycleStatus: PondLifecycleStatus;
   provisioning?: PondProvisioningState;

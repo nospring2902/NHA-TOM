@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Grid3x3, Waves, Settings, MapPin, Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Grid3x3, Waves, Settings, MapPin, Loader2, List, Map as MapIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AddPondModal } from "@/components/AddPondModal";
 import { DeviceSignalStatus } from "@/components/DeviceSignalStatus";
+import { PondsMapView } from "@/components/PondsMapView";
 import {
   BoundDevice,
   CreatePondAndBindResult,
@@ -42,17 +43,42 @@ type PondRow = {
   name: string;
   areaM2: number;
   location: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  lat?: number | null;
+  lng?: number | null;
+  geo?: {
+    lat: number;
+    lng: number;
+  } | null;
 };
 
 type PondSetupStatus = "READY" | RealtimeSignalStatus;
+type PondViewMode = "list" | "map";
 
 type ProfilePond = {
   id: string;
   name: string;
   area: string;
   location: string;
+  latitude: number | null;
+  longitude: number | null;
+  score: number | null;
   status: PondSetupStatus;
   boundDevice?: BoundDevice;
+};
+
+type PondCoordinateSource = {
+  id: string;
+  location: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  lat?: number | null;
+  lng?: number | null;
+  geo?: {
+    lat: number;
+    lng: number;
+  } | null;
 };
 
 const statusUi: Record<PondSetupStatus, { label: string; className: string }> = {
@@ -81,6 +107,45 @@ const truncate = (value: string, maxLength: number): string => {
   }
 
   return `${normalized.slice(0, maxLength - 1)}…`;
+};
+
+const isFiniteNumber = (value: unknown): value is number => {
+  return typeof value === "number" && Number.isFinite(value);
+};
+
+const hasValidCoordinatePair = (latitude: unknown, longitude: unknown): boolean => {
+  if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) {
+    return false;
+  }
+
+  return latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+};
+
+const resolvePondCoordinates = (
+  source: PondCoordinateSource,
+): { latitude: number; longitude: number } | null => {
+  if (hasValidCoordinatePair(source.latitude, source.longitude)) {
+    return {
+      latitude: source.latitude,
+      longitude: source.longitude,
+    };
+  }
+
+  if (hasValidCoordinatePair(source.lat, source.lng)) {
+    return {
+      latitude: source.lat,
+      longitude: source.lng,
+    };
+  }
+
+  if (source.geo && hasValidCoordinatePair(source.geo.lat, source.geo.lng)) {
+    return {
+      latitude: source.geo.lat,
+      longitude: source.geo.lng,
+    };
+  }
+
+  return null;
 };
 
 const mapDeviceStatusToPondStatus = (status: RealtimeDevice["status"]): PondSetupStatus => {
@@ -135,9 +200,11 @@ const getDeviceStatusText = (status: BoundDevice["status"]): string => {
 
 const ProfilePage = () => {
   const session = getAuthSession();
+  const navigate = useNavigate();
   const currentUserId = session?.user.id ?? null;
 
   const [activeTab, setActiveTab] = useState<"posts" | "ponds">("posts");
+  const [pondViewMode, setPondViewMode] = useState<PondViewMode>("list");
   const [ponds, setPonds] = useState<ProfilePond[]>([]);
   const [posts, setPosts] = useState<ProfilePost[]>([]);
   const [isLoadingPonds, setIsLoadingPonds] = useState(true);
@@ -162,6 +229,7 @@ const ProfilePage = () => {
             return {
               pondId: pond.id,
               devices: dashboard.data.devices,
+              score: dashboard.data.score,
             };
           }),
         );
@@ -171,18 +239,22 @@ const ProfilePage = () => {
         }
 
         const devicesByPondId = new Map<string, RealtimeDevice[]>();
+        const scoreByPondId = new Map<string, number | null>();
         for (const result of dashboardResponses) {
           if (result.status !== "fulfilled") {
             continue;
           }
 
           devicesByPondId.set(result.value.pondId, result.value.devices);
+          scoreByPondId.set(result.value.pondId, result.value.score);
         }
 
         const mapped = pondRows.map((pond) => {
           const area = `${pond.areaM2.toLocaleString("vi-VN")} m²`;
           const devices = devicesByPondId.get(pond.id) ?? [];
           const primaryDevice = devices[0];
+          const coordinates = resolvePondCoordinates(pond);
+          const score = scoreByPondId.get(pond.id) ?? null;
 
           if (!primaryDevice) {
             return {
@@ -190,6 +262,9 @@ const ProfilePage = () => {
               name: pond.name,
               area,
               location: pond.location,
+              latitude: coordinates?.latitude ?? null,
+              longitude: coordinates?.longitude ?? null,
+              score,
               status: "READY" as PondSetupStatus,
             };
           }
@@ -200,6 +275,9 @@ const ProfilePage = () => {
             name: pond.name,
             area,
             location: pond.location,
+            latitude: coordinates?.latitude ?? null,
+            longitude: coordinates?.longitude ?? null,
+            score,
             status: mapDeviceStatusToPondStatus(primaryDevice.status),
             boundDevice,
           };
@@ -383,15 +461,135 @@ const ProfilePage = () => {
     };
   }, [telemetryTargetKey, telemetryTargets]);
 
+  const pondIdsKey = useMemo(() => ponds.map((pond) => pond.id).sort().join("|"), [ponds]);
+
+  useEffect(() => {
+    if (!pondIdsKey) {
+      return;
+    }
+
+    const activePondIds = pondIdsKey.split("|");
+
+    let isMounted = true;
+
+    const syncCoordinatesAndScores = async () => {
+      const [pondRowsResult, dashboardResult] = await Promise.allSettled([
+        http.get<ApiEnvelope<PondRow[]>>("/ponds"),
+        Promise.allSettled(
+          activePondIds.map(async (pondId) => {
+            const dashboard = await getDashboardRealtime(pondId);
+            return {
+              pondId,
+              score: dashboard.data.score,
+            };
+          }),
+        ),
+      ]);
+
+      if (!isMounted) {
+        return;
+      }
+
+      const coordinatesByPondId = new Map<
+        string,
+        {
+          location: string;
+          latitude: number | null;
+          longitude: number | null;
+        }
+      >();
+
+      if (pondRowsResult.status === "fulfilled") {
+        for (const pond of pondRowsResult.value.data.data) {
+          const coordinates = resolvePondCoordinates(pond);
+          coordinatesByPondId.set(pond.id, {
+            location: pond.location,
+            latitude: coordinates?.latitude ?? null,
+            longitude: coordinates?.longitude ?? null,
+          });
+        }
+      }
+
+      const scoreByPondId = new Map<string, number | null>();
+      if (dashboardResult.status === "fulfilled") {
+        for (const item of dashboardResult.value) {
+          if (item.status !== "fulfilled") {
+            continue;
+          }
+
+          scoreByPondId.set(item.value.pondId, item.value.score);
+        }
+      }
+
+      if (coordinatesByPondId.size === 0 && scoreByPondId.size === 0) {
+        return;
+      }
+
+      setPonds((current) => {
+        let hasChanges = false;
+
+        const next = current.map((pond) => {
+          const nextCoordinates = coordinatesByPondId.get(pond.id);
+          const hasScore = scoreByPondId.has(pond.id);
+          const nextScore = hasScore ? (scoreByPondId.get(pond.id) ?? null) : pond.score;
+
+          const location = nextCoordinates?.location ?? pond.location;
+          const latitude = nextCoordinates?.latitude ?? pond.latitude;
+          const longitude = nextCoordinates?.longitude ?? pond.longitude;
+
+          if (
+            location === pond.location &&
+            latitude === pond.latitude &&
+            longitude === pond.longitude &&
+            nextScore === pond.score
+          ) {
+            return pond;
+          }
+
+          hasChanges = true;
+          return {
+            ...pond,
+            location,
+            latitude,
+            longitude,
+            score: nextScore,
+          };
+        });
+
+        return hasChanges ? next : current;
+      });
+    };
+
+    void syncCoordinatesAndScores();
+    const timer = window.setInterval(() => {
+      void syncCoordinatesAndScores();
+    }, 15000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(timer);
+    };
+  }, [pondIdsKey]);
+
   const handlePondCreated = (result: CreatePondAndBindResult) => {
     setPonds((current) => {
       const withoutDuplicated = current.filter((item) => item.id !== result.pond.id);
+      const coordinates = resolvePondCoordinates({
+        id: result.pond.id,
+        location: result.pond.location,
+        latitude: result.pond.latitude,
+        longitude: result.pond.longitude,
+      });
+
       return [
         {
           id: result.pond.id,
           name: result.pond.name,
           area: `${result.pond.areaM2.toLocaleString("vi-VN")} m²`,
           location: result.pond.location,
+          latitude: coordinates?.latitude ?? null,
+          longitude: coordinates?.longitude ?? null,
+          score: null,
           status: "WAITING_SIGNAL",
           boundDevice: result.device,
         },
@@ -428,6 +626,26 @@ const ProfilePage = () => {
       return hasChanges ? next : current;
     });
   }, []);
+
+  const handleOpenDashboard = useCallback(
+    (pondId: string) => {
+      navigate(`/dashboard/${pondId}`);
+    },
+    [navigate],
+  );
+
+  const pondsWithCoordinates = useMemo(() => {
+    return ponds.filter(
+      (
+        pond,
+      ): pond is ProfilePond & {
+        latitude: number;
+        longitude: number;
+      } => hasValidCoordinatePair(pond.latitude, pond.longitude),
+    );
+  }, [ponds]);
+
+  const pondsMissingCoordinatesCount = ponds.length - pondsWithCoordinates.length;
 
   return (
     <AppLayout>
@@ -527,6 +745,35 @@ const ProfilePage = () => {
           </div>
         ) : (
           <div className="space-y-3">
+            <div className="flex justify-end">
+              <div className="inline-flex items-center rounded-lg border border-border bg-card p-1 shadow-card">
+                <button
+                  type="button"
+                  onClick={() => setPondViewMode("list")}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    pondViewMode === "list"
+                      ? "gradient-ocean text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  Dạng danh sách
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPondViewMode("map")}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    pondViewMode === "map"
+                      ? "gradient-ocean text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <MapIcon className="h-3.5 w-3.5" />
+                  Dạng bản đồ
+                </button>
+              </div>
+            </div>
+
             {isLoadingPonds && (
               <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -546,7 +793,25 @@ const ProfilePage = () => {
               </div>
             )}
 
-            {!isLoadingPonds && !pondLoadError && ponds.map((pond) => {
+            {!isLoadingPonds && !pondLoadError && ponds.length > 0 && pondViewMode === "map" && (
+              <>
+                {pondsWithCoordinates.length > 0 ? (
+                  <PondsMapView ponds={pondsWithCoordinates} onOpenDashboard={handleOpenDashboard} />
+                ) : (
+                  <div className="rounded-lg border border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground text-center">
+                    Chưa có tọa độ từ ThingsBoard. Bật simulator hoặc chờ telemetry mới để hiển thị marker.
+                  </div>
+                )}
+
+                {pondsMissingCoordinatesCount > 0 && (
+                  <div className="rounded-lg border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
+                    {pondsMissingCoordinatesCount} ao chưa có vị trí telemetry từ ThingsBoard nên tạm thời chưa hiển thị trên bản đồ.
+                  </div>
+                )}
+              </>
+            )}
+
+            {!isLoadingPonds && !pondLoadError && pondViewMode === "list" && ponds.map((pond) => {
               const statusConfig = statusUi[pond.status];
 
               return (
@@ -601,6 +866,7 @@ const ProfilePage = () => {
                 </div>
               );
             })}
+
             <AddPondModal onCreated={handlePondCreated} />
           </div>
         )}

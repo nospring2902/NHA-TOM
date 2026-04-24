@@ -42,6 +42,12 @@ export type CreatedPond = {
   name: string;
   location: string;
   areaM2: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  geo?: {
+    lat: number;
+    lng: number;
+  } | null;
   lifecycleStatus?: string;
 };
 

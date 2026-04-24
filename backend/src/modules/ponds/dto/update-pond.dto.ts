@@ -1,5 +1,6 @@
-import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
-import { PondWaterType } from './create-pond.dto';
+import { Type } from 'class-transformer';
+import { IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { PondGeoDto, PondWaterType } from './create-pond.dto';
 
 export class UpdatePondDto {
   @IsOptional()
@@ -29,4 +30,9 @@ export class UpdatePondDto {
   @IsOptional()
   @IsEnum(PondWaterType)
   waterType?: PondWaterType;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PondGeoDto)
+  geo?: PondGeoDto;
 }
