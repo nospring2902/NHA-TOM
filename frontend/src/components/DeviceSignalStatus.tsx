@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Loader2, Wifi } from "lucide-react";
 import {
   formatLastActiveFromLastTelemetry,
@@ -14,6 +14,11 @@ type DeviceSignalStatusProps = {
 
 export const DeviceSignalStatus = ({ lastTelemetryAt, onStatusChange }: DeviceSignalStatusProps) => {
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const onStatusChangeRef = useRef(onStatusChange);
+
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -43,8 +48,8 @@ export const DeviceSignalStatus = ({ lastTelemetryAt, onStatusChange }: DeviceSi
   }, [status]);
 
   useEffect(() => {
-    onStatusChange?.(status);
-  }, [onStatusChange, status]);
+    onStatusChangeRef.current?.(status);
+  }, [status]);
 
   const lastActiveLabel = useMemo(
     () => formatLastActiveFromLastTelemetry(lastTelemetryAt, nowMs),

@@ -9,7 +9,7 @@ const THINGSBOARD_BASE_URL = (
 const INTERVAL_MS = Number(process.env.SIMULATOR_INTERVAL_MS || 5000);
 
 // Fallback token list. You can edit directly for quick local tests.
-const STATIC_ACCESS_TOKENS = ["cD294azZ3RyC6c6JqoGo"];
+const STATIC_ACCESS_TOKENS = ["LaQSXKgexmSdkS5fCkWj", "SHoW3rBot288omdKhea3"];
 
 function loadTokensFromFile() {
   const filePath = process.env.SIMULATOR_TOKENS_FILE;
