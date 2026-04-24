@@ -1,28 +1,48 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Grid3x3, Waves, Settings, MapPin } from "lucide-react";
+import { Grid3x3, Waves, Settings, MapPin, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AddPondModal } from "@/components/AddPondModal";
 import { DeviceSignalStatus } from "@/components/DeviceSignalStatus";
-import { BoundDevice, CreatePondAndBindResult, getTelemetryStatus } from "@/lib/device-binding";
+import {
+  BoundDevice,
+  CreatePondAndBindResult,
+  getApiErrorMessage,
+  getTelemetryStatus,
+} from "@/lib/device-binding";
 import { type RealtimeSignalStatus } from "@/lib/device-status";
+import { getAuthSession } from "@/lib/auth";
+import { http } from "@/lib/http";
+import { getDashboardRealtime, type RealtimeDevice } from "@/lib/dashboard";
 import AppLayout from "@/components/AppLayout";
 
-const userPosts = [
-  { id: 1, preview: "Thu hoạch vụ tôm thành công 🦐" },
-  { id: 2, preview: "Chia sẻ kinh nghiệm xử lý pH" },
-  { id: 3, preview: "Ao mới lắp cảm biến IoT" },
-  { id: 4, preview: "Kết quả sau 3 tháng sử dụng" },
-  { id: 5, preview: "Tips nuôi tôm mùa mưa" },
-  { id: 6, preview: "Đánh giá hệ thống cảnh báo" },
-];
+type ApiEnvelope<T> = {
+  success: boolean;
+  message: string;
+  data: T;
+  meta?: Record<string, unknown>;
+};
 
-const userPonds = [
-  { id: 1, name: "Ao Tôm A1", area: "2,000 m²", location: "Cà Mau" },
-  { id: 2, name: "Ao Tôm A2", area: "1,500 m²", location: "Cà Mau" },
-  { id: 3, name: "Ao Tôm B1", area: "3,000 m²", location: "Bạc Liêu" },
-];
+type ProfilePost = {
+  id: string;
+  preview: string;
+};
+
+type PostRow = {
+  id: string;
+  content: string;
+  author: {
+    id: string;
+  };
+};
+
+type PondRow = {
+  id: string;
+  name: string;
+  areaM2: number;
+  location: string;
+};
 
 type PondSetupStatus = "READY" | RealtimeSignalStatus;
 
@@ -54,17 +74,196 @@ const statusUi: Record<PondSetupStatus, { label: string; className: string }> = 
   },
 };
 
+const truncate = (value: string, maxLength: number): string => {
+  const normalized = value.trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1)}…`;
+};
+
+const mapDeviceStatusToPondStatus = (status: RealtimeDevice["status"]): PondSetupStatus => {
+  if (status === "ONLINE") {
+    return "ONLINE";
+  }
+
+  if (status === "OFFLINE" || status === "ERROR" || status === "MAINTENANCE") {
+    return "OFFLINE";
+  }
+
+  return "WAITING_SIGNAL";
+};
+
+const toBoundDevice = (pondId: string, device: RealtimeDevice): BoundDevice => {
+  return {
+    id: device.id,
+    pondId,
+    serialNumber: device.serialNumber,
+    model: device.model,
+    type: device.type,
+    status: device.status,
+    telemetryPackets: device.telemetryPackets,
+    boundAt: device.boundAt,
+    lastTelemetryAt: device.lastTelemetryAt,
+  };
+};
+
+const getDeviceStatusText = (status: BoundDevice["status"]): string => {
+  if (status === "ONLINE") {
+    return "Thiết bị đang trực tuyến";
+  }
+
+  if (status === "OFFLINE") {
+    return "Thiết bị đang mất tín hiệu";
+  }
+
+  if (status === "WAITING_SIGNAL") {
+    return "Thiết bị đang đợi tín hiệu đầu tiên";
+  }
+
+  if (status === "ERROR") {
+    return "Thiết bị đang báo lỗi";
+  }
+
+  if (status === "MAINTENANCE") {
+    return "Thiết bị đang bảo trì";
+  }
+
+  return "Thiết bị chưa kích hoạt";
+};
+
 const ProfilePage = () => {
+  const session = getAuthSession();
+  const currentUserId = session?.user.id ?? null;
+
   const [activeTab, setActiveTab] = useState<"posts" | "ponds">("posts");
-  const [ponds, setPonds] = useState<ProfilePond[]>(
-    userPonds.map((pond) => ({
-      id: String(pond.id),
-      name: pond.name,
-      area: pond.area,
-      location: pond.location,
-      status: "READY",
-    })),
-  );
+  const [ponds, setPonds] = useState<ProfilePond[]>([]);
+  const [posts, setPosts] = useState<ProfilePost[]>([]);
+  const [isLoadingPonds, setIsLoadingPonds] = useState(true);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
+  const [pondLoadError, setPondLoadError] = useState<string | null>(null);
+  const [postLoadError, setPostLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPonds = async () => {
+      setIsLoadingPonds(true);
+      setPondLoadError(null);
+
+      try {
+        const pondResponse = await http.get<ApiEnvelope<PondRow[]>>("/ponds");
+        const pondRows = pondResponse.data.data;
+
+        const dashboardResponses = await Promise.allSettled(
+          pondRows.map(async (pond) => {
+            const dashboard = await getDashboardRealtime(pond.id);
+            return {
+              pondId: pond.id,
+              devices: dashboard.data.devices,
+            };
+          }),
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        const devicesByPondId = new Map<string, RealtimeDevice[]>();
+        for (const result of dashboardResponses) {
+          if (result.status !== "fulfilled") {
+            continue;
+          }
+
+          devicesByPondId.set(result.value.pondId, result.value.devices);
+        }
+
+        const mapped = pondRows.map((pond) => {
+          const area = `${pond.areaM2.toLocaleString("vi-VN")} m²`;
+          const devices = devicesByPondId.get(pond.id) ?? [];
+          const primaryDevice = devices[0];
+
+          if (!primaryDevice) {
+            return {
+              id: pond.id,
+              name: pond.name,
+              area,
+              location: pond.location,
+              status: "READY" as PondSetupStatus,
+            };
+          }
+
+          const boundDevice = toBoundDevice(pond.id, primaryDevice);
+          return {
+            id: pond.id,
+            name: pond.name,
+            area,
+            location: pond.location,
+            status: mapDeviceStatusToPondStatus(primaryDevice.status),
+            boundDevice,
+          };
+        });
+
+        setPonds(mapped);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setPondLoadError(getApiErrorMessage(error, "Không tải được danh sách nhà tôm"));
+      } finally {
+        if (isMounted) {
+          setIsLoadingPonds(false);
+        }
+      }
+    };
+
+    const loadPosts = async () => {
+      setIsLoadingPosts(true);
+      setPostLoadError(null);
+
+      try {
+        const response = await http.get<ApiEnvelope<PostRow[]>>("/posts", {
+          params: {
+            page: 1,
+            limit: 50,
+          },
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        const filtered = currentUserId
+          ? response.data.data.filter((post) => post.author.id === currentUserId)
+          : response.data.data;
+
+        setPosts(
+          filtered.map((post) => ({
+            id: post.id,
+            preview: truncate(post.content, 58),
+          })),
+        );
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setPostLoadError(getApiErrorMessage(error, "Không tải được danh sách bài viết"));
+      } finally {
+        if (isMounted) {
+          setIsLoadingPosts(false);
+        }
+      }
+    };
+
+    void Promise.all([loadPonds(), loadPosts()]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUserId]);
 
   const telemetryTargets = useMemo(() => {
     return ponds
@@ -159,6 +358,7 @@ const ProfilePage = () => {
           hasChanges = true;
           return {
             ...item,
+            status: mapDeviceStatusToPondStatus(nextStatus.status),
             boundDevice: {
               ...item.boundDevice,
               status: nextStatus.status,
@@ -200,9 +400,11 @@ const ProfilePage = () => {
     });
   };
 
-  const handleSignalStatusChange = (pondId: string, signalStatus: RealtimeSignalStatus) => {
+  const handleSignalStatusChange = useCallback((pondId: string, signalStatus: RealtimeSignalStatus) => {
     setPonds((current) => {
-      return current.map((item) => {
+      let hasChanges = false;
+
+      const next = current.map((item) => {
         if (item.id !== pondId) {
           return item;
         }
@@ -215,13 +417,17 @@ const ProfilePage = () => {
           return item;
         }
 
+        hasChanges = true;
+
         return {
           ...item,
           status: signalStatus,
         };
       });
+
+      return hasChanges ? next : current;
     });
-  };
+  }, []);
 
   return (
     <AppLayout>
@@ -230,24 +436,33 @@ const ProfilePage = () => {
         <div className="bg-card rounded-xl border border-border shadow-card p-6 mb-5">
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <Avatar className="w-24 h-24">
-              <AvatarFallback className="gradient-ocean text-primary-foreground text-2xl font-bold">NV</AvatarFallback>
+              <AvatarFallback className="gradient-ocean text-primary-foreground text-2xl font-bold">
+                {(session?.user.fullName ?? "Người dùng")
+                  .split(" ")
+                  .map((part) => part[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()}
+              </AvatarFallback>
             </Avatar>
             <div className="flex-1 text-center sm:text-left">
-              <h1 className="text-xl font-bold text-foreground">Nguyễn Văn A</h1>
+              <h1 className="text-xl font-bold text-foreground">
+                {session?.user.fullName ?? "Người dùng"}
+              </h1>
               <p className="text-sm text-muted-foreground flex items-center justify-center sm:justify-start gap-1 mt-1">
-                <MapPin className="w-3.5 h-3.5" /> Cà Mau, Việt Nam
+                <MapPin className="w-3.5 h-3.5" /> {ponds[0]?.location ?? "Chưa cập nhật khu vực"}
               </p>
               <div className="flex items-center justify-center sm:justify-start gap-6 mt-4">
                 <div className="text-center">
-                  <p className="text-lg font-bold text-foreground">3</p>
+                  <p className="text-lg font-bold text-foreground">{ponds.length}</p>
                   <p className="text-xs text-muted-foreground">Ao tôm</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-foreground">128</p>
+                  <p className="text-lg font-bold text-foreground">--</p>
                   <p className="text-xs text-muted-foreground">Bạn bè</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-foreground">6</p>
+                  <p className="text-lg font-bold text-foreground">{posts.length}</p>
                   <p className="text-xs text-muted-foreground">Bài viết</p>
                 </div>
               </div>
@@ -281,15 +496,57 @@ const ProfilePage = () => {
         {/* Content */}
         {activeTab === "posts" ? (
           <div className="grid grid-cols-3 gap-2">
-            {userPosts.map((post) => (
-              <div key={post.id} className="aspect-square bg-secondary rounded-lg flex items-center justify-center p-3 hover:bg-ocean-light transition-colors cursor-pointer">
-                <p className="text-xs text-secondary-foreground text-center font-medium">{post.preview}</p>
+            {isLoadingPosts && (
+              <div className="col-span-3 flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Đang tải bài viết...
               </div>
-            ))}
+            )}
+
+            {!isLoadingPosts && postLoadError && (
+              <div className="col-span-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                {postLoadError}
+              </div>
+            )}
+
+            {!isLoadingPosts && !postLoadError && posts.length === 0 && (
+              <div className="col-span-3 rounded-lg border border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground text-center">
+                Bạn chưa có bài viết nào.
+              </div>
+            )}
+
+            {!isLoadingPosts && !postLoadError &&
+              posts.map((post) => (
+                <div
+                  key={post.id}
+                  className="aspect-square bg-secondary rounded-lg flex items-center justify-center p-3 hover:bg-ocean-light transition-colors cursor-pointer"
+                >
+                  <p className="text-xs text-secondary-foreground text-center font-medium">{post.preview}</p>
+                </div>
+              ))}
           </div>
         ) : (
           <div className="space-y-3">
-            {ponds.map((pond) => {
+            {isLoadingPonds && (
+              <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Đang tải nhà tôm...
+              </div>
+            )}
+
+            {!isLoadingPonds && pondLoadError && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                {pondLoadError}
+              </div>
+            )}
+
+            {!isLoadingPonds && !pondLoadError && ponds.length === 0 && (
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground text-center">
+                Chưa có nhà tôm nào. Hãy tạo nhà tôm đầu tiên.
+              </div>
+            )}
+
+            {!isLoadingPonds && !pondLoadError && ponds.map((pond) => {
               const statusConfig = statusUi[pond.status];
 
               return (
@@ -323,6 +580,17 @@ const ProfilePage = () => {
                           <p className="text-sm font-medium text-foreground">{pond.boundDevice.model}</p>
                           <p className="text-[11px] text-muted-foreground">Serial: {pond.boundDevice.serialNumber}</p>
                         </div>
+                        <p
+                          className={`mt-1 text-xs font-medium ${
+                            pond.boundDevice.status === "OFFLINE"
+                              ? "text-destructive"
+                              : pond.boundDevice.status === "ONLINE"
+                                ? "text-aqua"
+                                : "text-muted-foreground"
+                          }`}
+                        >
+                          {getDeviceStatusText(pond.boundDevice.status)}
+                        </p>
                         <DeviceSignalStatus
                           lastTelemetryAt={pond.boundDevice.lastTelemetryAt}
                           onStatusChange={(signalStatus) => handleSignalStatusChange(pond.id, signalStatus)}

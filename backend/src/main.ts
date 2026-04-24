@@ -6,7 +6,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const rawCorsOrigins =
-    process.env.CORS_ORIGINS ?? process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173';
+    process.env.CORS_ORIGINS ??
+    process.env.FRONTEND_ORIGIN ??
+    'http://localhost:5173,http://localhost:8080';
   const allowedOrigins = rawCorsOrigins
     .split(',')
     .map((origin) => origin.trim())
