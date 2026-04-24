@@ -140,3 +140,38 @@
     background-clip: text;
   }
 }
+
+.pond-map-marker-container {
+  background: transparent;
+  border: 0;
+}
+
+.pond-map-marker-dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  background: var(--pond-marker-color);
+  box-shadow: 0 0 0 5px var(--pond-marker-glow);
+}
+
+.pond-map-popup .leaflet-popup-content-wrapper {
+  border-radius: 0.95rem;
+  border: 1px solid hsl(var(--border));
+  background: transparent;
+  box-shadow: var(--shadow-elevated);
+}
+
+.pond-map-popup .leaflet-popup-content {
+  margin: 0;
+}
+
+.pond-map-popup .leaflet-popup-tip {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.pond-map-tile-layer {
+  filter: saturate(1.08) contrast(1.02);
+}

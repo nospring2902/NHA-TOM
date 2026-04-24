@@ -86,6 +86,8 @@ export class PondsService {
         ward: payload.ward.trim(),
         areaM2: payload.areaM2,
         averageDepthM: payload.averageDepthM,
+        latitude: payload.geo?.lat,
+        longitude: payload.geo?.lng,
         waterType: WATER_TYPE_TO_PRISMA[payload.waterType],
         timezone: payload.timezone?.trim() || 'Asia/Ho_Chi_Minh',
       },
@@ -128,6 +130,8 @@ export class PondsService {
         ward: payload.ward?.trim(),
         areaM2: payload.areaM2,
         averageDepthM: payload.averageDepthM,
+        latitude: payload.geo?.lat,
+        longitude: payload.geo?.lng,
         waterType: payload.waterType ? WATER_TYPE_TO_PRISMA[payload.waterType] : undefined,
       },
     });
@@ -448,6 +452,8 @@ export class PondsService {
     ward: string;
     areaM2: number;
     averageDepthM: number;
+    latitude: number | null;
+    longitude: number | null;
     waterType: PrismaPondWaterType;
     timezone: string;
     createdAt: Date;
@@ -464,6 +470,15 @@ export class PondsService {
       location: `${pond.ward}, ${pond.district}, ${pond.province}`,
       areaM2: pond.areaM2,
       averageDepthM: pond.averageDepthM,
+      latitude: pond.latitude,
+      longitude: pond.longitude,
+      geo:
+        pond.latitude != null && pond.longitude != null
+          ? {
+              lat: pond.latitude,
+              lng: pond.longitude,
+            }
+          : null,
       waterType: WATER_TYPE_FROM_PRISMA[pond.waterType],
       timezone: pond.timezone,
       createdAt: pond.createdAt,

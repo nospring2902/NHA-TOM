@@ -113,6 +113,8 @@ model Pond {
   ward                String
   areaM2              Float
   averageDepthM       Float
+  latitude            Float?
+  longitude           Float?
   waterType           PondWaterType
   lifecycleStatus     PondLifecycleStatus @default(PROVISIONING)
   timezone            String              @default("Asia/Ho_Chi_Minh")

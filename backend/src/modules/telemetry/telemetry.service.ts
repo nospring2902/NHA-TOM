@@ -26,6 +26,10 @@ type NormalizedTelemetryPayload = {
     temperature?: number;
     salinity?: number;
   };
+  geo?: {
+    lat: number;
+    lng: number;
+  };
   payload?: Record<string, unknown>;
 };
 
@@ -70,6 +74,7 @@ export class TelemetryService {
       }
 
       const metrics = normalizedPayload.metrics ?? {};
+      const geo = normalizedPayload.geo;
       const eventId = normalizedPayload.eventId?.trim() || this.generateEventId(device.id);
 
       const ingestResult = await this.prisma.$transaction(async (tx) => {
@@ -158,6 +163,18 @@ export class TelemetryService {
             },
           });
 
+          if (geo) {
+            await tx.pond.update({
+              where: {
+                id: pondId,
+              },
+              data: {
+                latitude: geo.lat,
+                longitude: geo.lng,
+              },
+            });
+          }
+
           await tx.activityLog.create({
             data: {
               pondId,
@@ -167,6 +184,7 @@ export class TelemetryService {
               metadata: {
                 deviceId: device.id,
                 eventId,
+                geo: geo ?? null,
               },
             },
           });
@@ -314,6 +332,9 @@ export class TelemetryService {
 
   private normalizePayload(payload: TelemetryIngestDto): NormalizedTelemetryPayload {
     const customPayload = this.asRecord(payload.payload);
+    const customGeo = this.asRecord(customPayload.geo);
+    const customLocation = this.asRecord(customPayload.location);
+    const customPosition = this.asRecord(customPayload.position);
 
     const metrics = {
       ph: this.resolveNumber(payload.metrics?.ph, payload.ph, customPayload.ph),
@@ -336,6 +357,35 @@ export class TelemetryService {
       ),
     };
 
+    const latitude = this.resolveNumber(
+      payload.latitude,
+      payload.lat,
+      payload.geo?.lat,
+      customPayload.latitude,
+      customPayload.lat,
+      customGeo.lat,
+      customLocation.lat,
+      customPosition.lat,
+    );
+
+    const longitude = this.resolveNumber(
+      payload.longitude,
+      payload.lng,
+      payload.lon,
+      payload.geo?.lng,
+      customPayload.longitude,
+      customPayload.lng,
+      customPayload.lon,
+      customGeo.lng,
+      customGeo.lon,
+      customLocation.lng,
+      customLocation.lon,
+      customPosition.lng,
+      customPosition.lon,
+    );
+
+    const geo = this.resolveGeo(latitude, longitude);
+
     return {
       eventId: payload.eventId?.trim() || this.resolveString(customPayload.eventId),
       timestamp: payload.timestamp ?? this.resolveString(customPayload.timestamp),
@@ -346,6 +396,7 @@ export class TelemetryService {
       thingsboardDeviceId:
         payload.thingsboardDeviceId ?? this.resolveString(customPayload.thingsboardDeviceId),
       metrics,
+      geo,
       payload: payload.payload,
     };
   }
@@ -456,6 +507,12 @@ export class TelemetryService {
       serialNumber: payload.serialNumber ?? null,
       tbDeviceId: payload.tbDeviceId ?? payload.thingsboardDeviceId ?? null,
       timestamp: payload.timestamp ?? null,
+      geo: payload.geo
+        ? {
+            lat: payload.geo.lat,
+            lng: payload.geo.lng,
+          }
+        : null,
       metrics: payload.metrics
         ? {
             ph: payload.metrics.ph ?? null,
@@ -598,6 +655,32 @@ export class TelemetryService {
     }
 
     return undefined;
+  }
+
+  private resolveGeo(
+    latitude: number | undefined,
+    longitude: number | undefined,
+  ): { lat: number; lng: number } | undefined {
+    if (latitude == null || longitude == null) {
+      return undefined;
+    }
+
+    if (!this.isValidLatitude(latitude) || !this.isValidLongitude(longitude)) {
+      return undefined;
+    }
+
+    return {
+      lat: Number(latitude.toFixed(6)),
+      lng: Number(longitude.toFixed(6)),
+    };
+  }
+
+  private isValidLatitude(value: number): boolean {
+    return value >= -90 && value <= 90;
+  }
+
+  private isValidLongitude(value: number): boolean {
+    return value >= -180 && value <= 180;
   }
 
   private asRecord(value: unknown): Record<string, unknown> {
