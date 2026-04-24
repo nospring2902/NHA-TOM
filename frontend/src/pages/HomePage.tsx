@@ -20,7 +20,7 @@ const mockPosts = [
     user: "Nguyễn Thị Hoa",
     avatar: "NH",
     time: "5 giờ trước",
-    content: "Vụ tôm này thu hoạch được 3 tấn/ao, nhờ hệ thống cảnh báo kịp thời khi oxy xuống thấp đêm qua. Cảm ơn AquaShrimp! 🦐",
+    content: "Vụ tôm này thu hoạch được 3 tấn/ao, nhờ hệ thống cảnh báo kịp thời khi oxy xuống thấp đêm qua. Cảm ơn Nhà tôm ! 🦐",
     likes: 56,
     comments: 15,
     liked: true,

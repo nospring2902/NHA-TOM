@@ -24,7 +24,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         <div className="container h-full flex items-center justify-between">
           <Link to="/home" className="flex items-center gap-2">
             <Droplets className="w-6 h-6 text-primary" />
-            <span className="text-lg font-bold text-foreground">AquaShrimp</span>
+            <span className="text-lg font-bold text-foreground">Nhà tôm </span>
           </Link>
           <div className="hidden md:flex items-center gap-1">
             {navItems.map((item) => (

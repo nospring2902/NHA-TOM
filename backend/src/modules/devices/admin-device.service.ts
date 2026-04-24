@@ -41,7 +41,7 @@ export class AdminDeviceService {
       const created = await this.prisma.device.create({
         data: {
           serialNumber: normalizedSerial,
-          model: 'AquaShrimp Sensor Hub V2',
+          model: 'Nhà tôm  Sensor Hub V2',
           type: DeviceType.SENSOR_GATEWAY,
           status: DeviceStatus.INACTIVE,
           isActive: false,

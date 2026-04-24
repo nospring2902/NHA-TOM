@@ -73,7 +73,7 @@ const LoginPage = () => {
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <Droplets className="w-8 h-8 text-primary" />
-            <span className="text-2xl font-bold text-foreground">AquaShrimp</span>
+            <span className="text-2xl font-bold text-foreground">Nhà tôm </span>
           </Link>
           <h1 className="text-2xl font-bold text-foreground">Đăng nhập</h1>
           <p className="text-muted-foreground mt-1">Chào mừng bạn trở lại</p>
