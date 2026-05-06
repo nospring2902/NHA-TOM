@@ -1,10 +1,18 @@
 import axios from "axios";
 import { getAccessToken } from "@/lib/auth";
 
-const apiBaseUrl =
+export const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL ??
   import.meta.env.VITE_BACKEND_URL ??
   "http://localhost:3000/api/v1";
+
+export const getApiOrigin = (): string => {
+  try {
+    return new URL(apiBaseUrl).origin;
+  } catch {
+    return window.location.origin;
+  }
+};
 
 export const http = axios.create({
   baseURL: apiBaseUrl,

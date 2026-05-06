@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Req } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Req, Param } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthContextService } from '../auth/auth-context.service';
 import { UsersService } from './users.service';
@@ -15,6 +15,12 @@ export class UsersController {
   getMe(@Req() req: Request) {
     const userId = this.authContextService.requireCurrentUserId(req);
     return this.usersService.getMe(userId);
+  }
+
+  @Get(':id')
+  getById(@Param('id') id: string, @Req() req: Request) {
+    this.authContextService.requireCurrentUserId(req);
+    return this.usersService.getById(id);
   }
 
   @Patch('me')

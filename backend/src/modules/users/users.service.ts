@@ -53,4 +53,26 @@ export class UsersService {
       },
     };
   }
+
+  async getById(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy người dùng');
+    }
+
+    return {
+      success: true,
+      message: 'Get profile successfully',
+      data: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+    };
+  }
 }

@@ -1,6 +1,17 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, User, Bell, MessageCircle, Droplets, Cpu } from "lucide-react";
 import { getAuthSession } from "@/lib/auth";
+import SearchBar from "@/components/SearchBar";
+import ChatDock from "@/components/ChatDock";
+import { useFriends } from "@/contexts/FriendsContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 const baseNavItems = [
   { to: "/home", icon: Home, label: "Trang chủ" },
@@ -12,6 +23,7 @@ const baseNavItems = [
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { pathname } = useLocation();
   const session = getAuthSession();
+  const { requests, acceptRequest, rejectRequest } = useFriends();
   const navItems =
     session?.user.role === "ADMIN"
       ? [...baseNavItems, { to: "/admin/devices", icon: Cpu, label: "Admin Devices" }]
@@ -21,12 +33,15 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="min-h-screen bg-background">
       {/* Top nav */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-card/90 backdrop-blur-lg border-b border-border h-14">
-        <div className="container h-full flex items-center justify-between">
-          <Link to="/home" className="flex items-center gap-2">
+        <div className="container h-full flex items-center gap-6">
+          <Link to="/home" className="flex items-center gap-2 shrink-0">
             <Droplets className="w-6 h-6 text-primary" />
             <span className="text-lg font-bold text-foreground">Nhà tôm </span>
           </Link>
-          <div className="hidden md:flex items-center gap-1">
+          <div className="flex-1 hidden md:block">
+            <SearchBar />
+          </div>
+          <div className="hidden md:flex items-center gap-1 ml-auto">
             {navItems.map((item) => (
               <Link
                 key={item.to}
@@ -42,11 +57,65 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               </Link>
             ))}
           </div>
+          <div className="hidden md:flex items-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground">
+                  <Bell className="h-4 w-4" />
+                  {requests.length > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-4 px-1 rounded-full bg-coral text-[10px] text-white flex items-center justify-center">
+                      {requests.length}
+                    </span>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel>Thông báo</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {requests.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    Không có lời mời kết bạn mới.
+                  </div>
+                )}
+                {requests.map((request) => (
+                  <div key={request.id} className="px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {request.requester.fullName}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">Đã gửi lời mời kết bạn</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => void acceptRequest(request.id)}
+                        >
+                          Đồng ý
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => void rejectRequest(request.id)}
+                        >
+                          Từ chối
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </header>
 
       {/* Main */}
       <main className="pt-14 pb-16 md:pb-0">{children}</main>
+
+      <ChatDock />
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/90 backdrop-blur-lg border-t border-border">
