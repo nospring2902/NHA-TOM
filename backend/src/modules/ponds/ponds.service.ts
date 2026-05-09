@@ -496,13 +496,13 @@ export class PondsService {
       data: [
         {
           serialNumber: 'AS-2026-0001',
-          model: 'AquaShrimp Sensor Hub V2',
+          model: 'Nhà tôm  Sensor Hub V2',
           type: DeviceType.SENSOR_GATEWAY,
           status: InventoryStatus.AVAILABLE,
         },
         {
           serialNumber: 'AS-2026-0002',
-          model: 'AquaShrimp Sensor Hub V2',
+          model: 'Nhà tôm  Sensor Hub V2',
           type: DeviceType.SENSOR_GATEWAY,
           status: InventoryStatus.AVAILABLE,
         },

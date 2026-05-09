@@ -21,7 +21,7 @@ const LandingPage = () => {
         <div className="container flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
             <Droplets className="w-7 h-7 text-primary" />
-            <span className="text-xl font-bold text-foreground">AquaShrimp</span>
+            <span className="text-xl font-bold text-foreground">Nhà tôm </span>
           </div>
           <div className="flex items-center gap-3">
             <Link to="/login">
@@ -142,9 +142,9 @@ const LandingPage = () => {
         <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Droplets className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-foreground">AquaShrimp</span>
+            <span className="font-semibold text-foreground">Nhà tôm </span>
           </div>
-          <p className="text-sm text-muted-foreground">© 2026 AquaShrimp. Nền tảng giám sát ao tôm thông minh.</p>
+          <p className="text-sm text-muted-foreground">© 2026 Nhà tôm . Nền tảng giám sát ao tôm thông minh.</p>
         </div>
       </footer>
     </div>

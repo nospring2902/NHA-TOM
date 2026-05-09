@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: AquaShrimp Backend API
+  title: Nhà tôm  Backend API
   version: 1.0.0
-  description: API spec for AquaShrimp IoT shrimp pond platform.
+  description: API spec for Nhà tôm  IoT shrimp pond platform.
 servers:
   - url: http://localhost:3000
     description: Local

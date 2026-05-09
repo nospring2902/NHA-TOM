@@ -25,13 +25,42 @@ export class AuthService {
     const fullName = payload.fullName.trim();
 
     try {
-      const user = await this.prisma.user.create({
-        data: {
-          email,
-          fullName,
-          passwordHash: createUserPasswordHash(payload.password),
-          role: 'FARM_MANAGER',
-        },
+      const user = await this.prisma.$transaction(async (tx) => {
+        const adminUser = await tx.user.findFirst({
+          where: {
+            role: 'ADMIN',
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        const createdUser = await tx.user.create({
+          data: {
+            email,
+            fullName,
+            passwordHash: createUserPasswordHash(payload.password),
+            role: 'FARM_MANAGER',
+          },
+        });
+
+        if (adminUser) {
+          await tx.friend.createMany({
+            data: [
+              {
+                userId: createdUser.id,
+                friendId: adminUser.id,
+              },
+              {
+                userId: adminUser.id,
+                friendId: createdUser.id,
+              },
+            ],
+            skipDuplicates: true,
+          });
+        }
+
+        return createdUser;
       });
 
       const tokens = await this.issueSessionTokens(user);

@@ -25,6 +25,13 @@ type ApiEnvelope<T> = {
   meta?: Record<string, unknown>;
 };
 
+type ProfileUser = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+};
+
 type ProfilePost = {
   id: string;
   preview: string;
@@ -201,7 +208,10 @@ const getDeviceStatusText = (status: BoundDevice["status"]): string => {
 const ProfilePage = () => {
   const session = getAuthSession();
   const navigate = useNavigate();
-  const currentUserId = session?.user.id ?? null;
+  const [profileUser, setProfileUser] = useState<ProfileUser | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const currentUserId = profileUser?.id ?? session?.user.id ?? null;
 
   const [activeTab, setActiveTab] = useState<"posts" | "ponds">("posts");
   const [pondViewMode, setPondViewMode] = useState<PondViewMode>("list");
@@ -211,6 +221,47 @@ const ProfilePage = () => {
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [pondLoadError, setPondLoadError] = useState<string | null>(null);
   const [postLoadError, setPostLoadError] = useState<string | null>(null);
+  const [pondTotal, setPondTotal] = useState<number | null>(null);
+  const [postTotal, setPostTotal] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadProfile = async () => {
+      setIsLoadingProfile(true);
+      setProfileError(null);
+
+      try {
+        const response = await http.get<ApiEnvelope<ProfileUser>>("/users/me");
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProfileUser(response.data.data);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setProfileError(getApiErrorMessage(error, "Không tải được thông tin tài khoản"));
+      } finally {
+        if (isMounted) {
+          setIsLoadingProfile(false);
+        }
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -222,6 +273,10 @@ const ProfilePage = () => {
       try {
         const pondResponse = await http.get<ApiEnvelope<PondRow[]>>("/ponds");
         const pondRows = pondResponse.data.data;
+        const totalPonds =
+          typeof pondResponse.data.meta?.total === "number"
+            ? pondResponse.data.meta.total
+            : pondRows.length;
 
         const dashboardResponses = await Promise.allSettled(
           pondRows.map(async (pond) => {
@@ -284,6 +339,7 @@ const ProfilePage = () => {
         });
 
         setPonds(mapped);
+        setPondTotal(totalPonds);
       } catch (error) {
         if (!isMounted) {
           return;
@@ -306,6 +362,7 @@ const ProfilePage = () => {
           params: {
             page: 1,
             limit: 50,
+            mine: true,
           },
         });
 
@@ -313,16 +370,18 @@ const ProfilePage = () => {
           return;
         }
 
-        const filtered = currentUserId
-          ? response.data.data.filter((post) => post.author.id === currentUserId)
-          : response.data.data;
+        const totalPosts =
+          typeof response.data.meta?.total === "number"
+            ? response.data.meta.total
+            : response.data.data.length;
 
         setPosts(
-          filtered.map((post) => ({
+          response.data.data.map((post) => ({
             id: post.id,
             preview: truncate(post.content, 58),
           })),
         );
+        setPostTotal(totalPosts);
       } catch (error) {
         if (!isMounted) {
           return;
@@ -646,6 +705,9 @@ const ProfilePage = () => {
   }, [ponds]);
 
   const pondsMissingCoordinatesCount = ponds.length - pondsWithCoordinates.length;
+  const displayName = profileUser?.fullName ?? session?.user.fullName ?? "Người dùng";
+  const pondsCount = pondTotal ?? ponds.length;
+  const postsCount = postTotal ?? posts.length;
 
   return (
     <AppLayout>
@@ -655,7 +717,7 @@ const ProfilePage = () => {
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <Avatar className="w-24 h-24">
               <AvatarFallback className="gradient-ocean text-primary-foreground text-2xl font-bold">
-                {(session?.user.fullName ?? "Người dùng")
+                {displayName
                   .split(" ")
                   .map((part) => part[0])
                   .join("")
@@ -665,14 +727,23 @@ const ProfilePage = () => {
             </Avatar>
             <div className="flex-1 text-center sm:text-left">
               <h1 className="text-xl font-bold text-foreground">
-                {session?.user.fullName ?? "Người dùng"}
+                {displayName}
               </h1>
               <p className="text-sm text-muted-foreground flex items-center justify-center sm:justify-start gap-1 mt-1">
                 <MapPin className="w-3.5 h-3.5" /> {ponds[0]?.location ?? "Chưa cập nhật khu vực"}
               </p>
+              {isLoadingProfile && !profileUser && (
+                <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Đang tải hồ sơ...
+                </p>
+              )}
+              {profileError && (
+                <p className="text-xs text-destructive mt-2">{profileError}</p>
+              )}
               <div className="flex items-center justify-center sm:justify-start gap-6 mt-4">
                 <div className="text-center">
-                  <p className="text-lg font-bold text-foreground">{ponds.length}</p>
+                  <p className="text-lg font-bold text-foreground">{pondsCount}</p>
                   <p className="text-xs text-muted-foreground">Ao tôm</p>
                 </div>
                 <div className="text-center">
@@ -680,7 +751,7 @@ const ProfilePage = () => {
                   <p className="text-xs text-muted-foreground">Bạn bè</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-foreground">{posts.length}</p>
+                  <p className="text-lg font-bold text-foreground">{postsCount}</p>
                   <p className="text-xs text-muted-foreground">Bài viết</p>
                 </div>
               </div>

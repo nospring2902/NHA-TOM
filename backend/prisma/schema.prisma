@@ -69,6 +69,12 @@ enum MetricQualityFlag {
   IMPUTED
 }
 
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 model User {
   id                   String            @id @default(uuid())
   email                String            @unique
@@ -82,6 +88,14 @@ model User {
   pondMemberships      PondMember[]
   activityLogs         ActivityLog[]
   posts                Post[]
+  postLikes            PostLike[]
+  postComments         PostComment[]
+  friends              Friend[]          @relation("UserFriends")
+  friendOf             Friend[]          @relation("UserFriendOf")
+  sentFriendRequests   FriendRequest[]   @relation("FriendRequestSender")
+  receivedFriendRequests FriendRequest[] @relation("FriendRequestRecipient")
+  sentMessages         ChatMessage[]     @relation("ChatSender")
+  receivedMessages     ChatMessage[]     @relation("ChatRecipient")
   commandRequests      DeviceCommand[]   @relation("CommandRequestedBy")
   provisionedDevices   Device[]          @relation("DeviceOwner")
   activatedInventories DeviceInventory[] @relation("InventoryActivatedBy")
@@ -322,8 +336,79 @@ model Post {
   updatedAt    DateTime @updatedAt
   pond         Pond?    @relation(fields: [pondId], references: [id], onDelete: SetNull)
   authorUser   User     @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  likes        PostLike[]
+  comments     PostComment[]
 
   @@index([authorUserId, createdAt])
   @@index([pondId, createdAt])
   @@map("posts")
+}
+
+model PostLike {
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+  @@index([postId, createdAt])
+  @@map("post_likes")
+}
+
+model PostComment {
+  id           String   @id @default(uuid())
+  postId       String
+  authorUserId String
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  post         Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorUser   User     @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorUserId, createdAt])
+  @@map("post_comments")
+}
+
+model Friend {
+  userId    String
+  friendId  String
+  createdAt DateTime @default(now())
+  user      User     @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friend    User     @relation("UserFriendOf", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@id([userId, friendId])
+  @@index([friendId])
+  @@map("friends")
+}
+
+model FriendRequest {
+  id          String              @id @default(uuid())
+  requesterId String
+  recipientId String
+  status      FriendRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  requester   User                @relation("FriendRequestSender", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient   User                @relation("FriendRequestRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, recipientId])
+  @@index([recipientId, status, createdAt])
+  @@map("friend_requests")
+}
+
+model ChatMessage {
+  id          String   @id @default(uuid())
+  senderId    String
+  recipientId String
+  content     String
+  createdAt   DateTime @default(now())
+  sender      User     @relation("ChatSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User     @relation("ChatRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, createdAt])
+  @@index([recipientId, createdAt])
+  @@map("chat_messages")
 }
