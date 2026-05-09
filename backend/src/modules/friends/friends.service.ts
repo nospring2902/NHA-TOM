@@ -230,7 +230,7 @@ export class FriendsService {
       throw new BadRequestException('Lời mời đã được xử lý');
     }
 
-    const [updatedRequest, friendUser] = await this.prisma.$transaction([
+    const [updatedRequest, requesterUser, recipientUser] = await this.prisma.$transaction([
       this.prisma.friendRequest.update({
         where: { id: requestId },
         data: { status: 'ACCEPTED' },
@@ -239,41 +239,52 @@ export class FriendsService {
         where: { id: request.requesterId },
         select: { id: true, fullName: true, email: true },
       }),
+      this.prisma.user.findUnique({
+        where: { id: request.recipientId },
+        select: { id: true, fullName: true, email: true },
+      }),
       this.prisma.friend.createMany({
         data: [
           {
-            userId,
+            userId: request.recipientId,
             friendId: request.requesterId,
           },
           {
             userId: request.requesterId,
-            friendId: userId,
+            friendId: request.recipientId,
           },
         ],
         skipDuplicates: true,
       }),
     ]);
 
-    const friend = friendUser ?? { id: request.requesterId, fullName: 'Bạn bè', email: '' };
+    // Recipient (B) should see requester (A) as friend.
+    const friendForRecipient =
+      requesterUser ?? ({ id: request.requesterId, fullName: 'Bạn bè', email: '' } as const);
+
+    // Requester (A) should see recipient (B) as friend.
+    const friendForRequester =
+      recipientUser ?? ({ id: request.recipientId, fullName: 'Bạn bè', email: '' } as const);
 
     if (!silent) {
       this.realtimeService.emitToUser(request.requesterId, 'friend:accepted', {
         user: {
           id: userId,
         },
-        friend,
+        friend: friendForRequester,
       });
+
       this.realtimeService.emitToUser(userId, 'friend:accepted', {
         user: {
           id: userId,
         },
-        friend,
+        friend: friendForRecipient,
       });
     }
 
     return {
       request: updatedRequest,
-      friend,
+      friend: friendForRecipient,
     };
   }
 
@@ -310,7 +321,7 @@ export class FriendsService {
     };
   }
 
-  async listMessages(userId: string, friendId: string, limit = 50) {
+  async listMessages(userId: string, friendId: string, limit = 50, cursor?: string) {
     const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 50;
 
     await this.ensureRecipient(userId, friendId);
@@ -328,10 +339,9 @@ export class FriendsService {
           },
         ],
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: safeLimit,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
 
     return {

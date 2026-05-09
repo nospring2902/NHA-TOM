@@ -1,4 +1,5 @@
 import { Loader2, MoreHorizontal, Send } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useChat } from "@/contexts/ChatContext";
@@ -53,14 +54,39 @@ const ChatDock = () => {
     chatTargets,
     messagesByUserId,
     loadingByUserId,
+    loadingMoreByUserId,
+    hasMoreByUserId,
     sendingByUserId,
     draftByUserId,
     closeChat,
     sendChatMessage,
+    loadMoreMessages,
     setDraft,
   } = useChat();
   const { onlineUserIds } = useFriends();
   const currentUserId = getAuthSession()?.user.id ?? null;
+
+  const scrollContainersRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const pendingPrependScrollHeightRef = useRef<Record<string, number>>({});
+
+  useLayoutEffect(() => {
+    for (const userId of openChatIds) {
+      const container = scrollContainersRef.current[userId];
+      if (!container) {
+        continue;
+      }
+
+      const pendingHeight = pendingPrependScrollHeightRef.current[userId];
+      const isPending = typeof pendingHeight === "number";
+      const isLoadingMore = Boolean(loadingMoreByUserId[userId]);
+
+      if (isPending && !isLoadingMore) {
+        delete pendingPrependScrollHeightRef.current[userId];
+        const newScrollHeight = container.scrollHeight;
+        container.scrollTop = Math.max(0, newScrollHeight - pendingHeight);
+      }
+    }
+  }, [loadingMoreByUserId, openChatIds]);
 
   if (openChatIds.length === 0) {
     return null;
@@ -113,7 +139,30 @@ const ChatDock = () => {
               </Button>
             </div>
 
-            <div className="flex-1 max-h-72 overflow-y-auto p-3 space-y-2 bg-muted/20">
+            <div
+              ref={(element) => {
+                scrollContainersRef.current[userId] = element;
+              }}
+              onScroll={(event) => {
+                const container = event.currentTarget;
+                const shouldLoadMore =
+                  container.scrollTop <= 0 &&
+                  Boolean(hasMoreByUserId[userId]) &&
+                  !Boolean(loadingMoreByUserId[userId]);
+
+                if (shouldLoadMore) {
+                  pendingPrependScrollHeightRef.current[userId] = container.scrollHeight;
+                  void loadMoreMessages(userId);
+                }
+              }}
+              className="flex-1 max-h-72 overflow-y-auto p-3 space-y-2 bg-muted/20"
+            >
+              {Boolean(loadingMoreByUserId[userId]) && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Đang tải tin nhắn cũ hơn...
+                </div>
+              )}
               {isLoading && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

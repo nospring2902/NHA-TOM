@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { getAuthSession } from "@/lib/auth";
+import { getAuthSession, subscribeAuthSession } from "@/lib/auth";
 import { createRealtimeSocket, type RealtimeSocket } from "@/lib/realtime";
 
 type RealtimeContextValue = {
@@ -11,11 +11,19 @@ const RealtimeContext = createContext<RealtimeContextValue>({
 });
 
 export const RealtimeProvider = ({ children }: { children: React.ReactNode }) => {
-  const session = useMemo(() => getAuthSession(), []);
+  const [authVersion, setAuthVersion] = useState(0);
+  const session = useMemo(() => getAuthSession(), [authVersion]);
   const [socket, setSocket] = useState<RealtimeSocket | null>(null);
 
   useEffect(() => {
+    return subscribeAuthSession(() => {
+      setAuthVersion((current) => current + 1);
+    });
+  }, []);
+
+  useEffect(() => {
     if (!session?.accessToken) {
+      setSocket(null);
       return;
     }
 

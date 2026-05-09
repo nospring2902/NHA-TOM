@@ -4,10 +4,12 @@ import { getAuthSession } from "@/lib/auth";
 import SearchBar from "@/components/SearchBar";
 import ChatDock from "@/components/ChatDock";
 import { useFriends } from "@/contexts/FriendsContext";
+import { useChat } from "@/contexts/ChatContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuLabel,
+  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -24,10 +26,13 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { pathname } = useLocation();
   const session = getAuthSession();
   const { requests, acceptRequest, rejectRequest } = useFriends();
+  const { unreadTotal, unreadThreads, openChat } = useChat();
   const navItems =
     session?.user.role === "ADMIN"
       ? [...baseNavItems, { to: "/admin/devices", icon: Cpu, label: "Admin Devices" }]
       : baseNavItems;
+
+  const notificationCount = requests.length + unreadTotal;
 
   return (
     <div className="min-h-screen bg-background">
@@ -62,9 +67,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               <DropdownMenuTrigger asChild>
                 <button className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground">
                   <Bell className="h-4 w-4" />
-                  {requests.length > 0 && (
+                  {notificationCount > 0 && (
                     <span className="absolute -top-1 -right-1 min-w-[18px] h-4 px-1 rounded-full bg-coral text-[10px] text-white flex items-center justify-center">
-                      {requests.length}
+                      {notificationCount}
                     </span>
                   )}
                 </button>
@@ -72,10 +77,45 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               <DropdownMenuContent align="end" className="w-72">
                 <DropdownMenuLabel>Thông báo</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {requests.length === 0 && (
+                {requests.length === 0 && unreadTotal === 0 && (
                   <div className="px-3 py-2 text-xs text-muted-foreground">
-                    Không có lời mời kết bạn mới.
+                    Không có thông báo mới.
                   </div>
+                )}
+
+                {unreadTotal > 0 && (
+                  <>
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      Tin nhắn mới ({unreadTotal})
+                    </div>
+                    {unreadThreads.slice(0, 3).map((thread) => (
+                      <DropdownMenuItem
+                        key={thread.userId}
+                        className="flex flex-col items-start gap-0.5"
+                        onSelect={() =>
+                          openChat({
+                            id: thread.userId,
+                            fullName: thread.fullName,
+                          })
+                        }
+                      >
+                        <div className="flex w-full items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-foreground truncate">
+                            {thread.fullName}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground shrink-0">
+                            {thread.count}
+                          </span>
+                        </div>
+                        {thread.lastMessage && (
+                          <span className="text-[11px] text-muted-foreground truncate w-full">
+                            {thread.lastMessage}
+                          </span>
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>
                 )}
                 {requests.map((request) => (
                   <div key={request.id} className="px-3 py-2">

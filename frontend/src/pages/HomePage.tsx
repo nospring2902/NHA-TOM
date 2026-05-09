@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import AppLayout from "@/components/AppLayout";
 import { getAuthSession } from "@/lib/auth";
 import { getApiErrorMessage } from "@/lib/device-binding";
+import { toast } from "@/hooks/use-toast";
 import {
   createComment,
   createPost,
@@ -70,7 +71,16 @@ const HomePage = () => {
   );
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { friends, suggestions, onlineUserIds, isLoadingFriends, friendsError, isLoadingSuggestions, suggestionsError, sendRequest } = useFriends();
+  const {
+    friends,
+    suggestions,
+    onlineUserIds,
+    isLoadingFriends,
+    friendsError,
+    isLoadingSuggestions,
+    suggestionsError,
+    sendRequest,
+  } = useFriends();
   const { openChat } = useChat();
 
   const [posts, setPosts] = useState<PostItem[]>([]);
@@ -87,6 +97,7 @@ const HomePage = () => {
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
   const [likeLoading, setLikeLoading] = useState<Record<string, boolean>>({});
+  const [requestingById, setRequestingById] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let isMounted = true;
@@ -332,6 +343,45 @@ const HomePage = () => {
     () => friendsWithStatus.filter((friend) => friend.isOnline),
     [friendsWithStatus],
   );
+
+  const handleOpenChat = (friendId: string) => {
+    const friend = friendsWithStatus.find((item) => item.id === friendId);
+    if (!friend) {
+      return;
+    }
+
+    openChat({
+      id: friend.id,
+      fullName: friend.fullName,
+      email: friend.email,
+    });
+  };
+
+  const handleSendRequest = async (friendId: string) => {
+    if (requestingById[friendId]) {
+      return;
+    }
+
+    setRequestingById((current) => ({
+      ...current,
+      [friendId]: true,
+    }));
+
+    try {
+      await sendRequest(friendId);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Không thể gửi lời mời",
+        description: getApiErrorMessage(error, "Không thể gửi lời mời kết bạn"),
+      });
+    } finally {
+      setRequestingById((current) => ({
+        ...current,
+        [friendId]: false,
+      }));
+    }
+  };
 
   return (
     <AppLayout>
@@ -612,6 +662,74 @@ const HomePage = () => {
 
             <div className="bg-card rounded-xl border border-border shadow-card p-4">
               <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground">Gợi ý kết bạn</h3>
+                <span className="text-xs text-muted-foreground">{suggestions.length}</span>
+              </div>
+              {suggestionsError && (
+                <p className="text-xs text-destructive mb-2">{suggestionsError}</p>
+              )}
+              {isLoadingSuggestions && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Đang tải gợi ý...
+                </div>
+              )}
+              {!isLoadingSuggestions && suggestions.length === 0 && !suggestionsError && (
+                <p className="text-xs text-muted-foreground">Chưa có gợi ý phù hợp.</p>
+              )}
+              {!isLoadingSuggestions && suggestions.length > 0 && (
+                <div className="space-y-2">
+                  {suggestions.map((suggestion) => {
+                    const isRequesting = requestingById[suggestion.id];
+                    const isPending = suggestion.isRequested;
+
+                    return (
+                      <div
+                        key={suggestion.id}
+                        className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Avatar className="w-8 h-8">
+                            <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                              {getInitials(suggestion.fullName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {suggestion.fullName}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {suggestion.email}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={isPending ? "outline" : "default"}
+                          className="h-7 px-2 text-xs"
+                          disabled={isPending || isRequesting}
+                          onClick={() => void handleSendRequest(suggestion.id)}
+                        >
+                          {isRequesting ? (
+                            <span className="flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Đang gửi
+                            </span>
+                          ) : isPending ? (
+                            "Đang chờ"
+                          ) : (
+                            "Kết bạn"
+                          )}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-card rounded-xl border border-border shadow-card p-4">
+              <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-foreground">Bạn bè</h3>
                 <span className="text-xs text-muted-foreground">{friendsWithStatus.length}</span>
               </div>
@@ -654,116 +772,6 @@ const HomePage = () => {
           </div>
         </div>
       </div>
-
-      {openChats.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-[70] flex flex-row-reverse gap-3">
-          {openChats.map((friend) => {
-            const messages = messagesByFriendId[friend.id] ?? [];
-            const isLoading = messagesLoading[friend.id];
-            const isSending = messageSending[friend.id];
-
-            return (
-              <div
-                key={friend.id}
-                className="w-72 bg-card border border-border rounded-xl shadow-elevated flex flex-col overflow-hidden"
-              >
-                <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <Avatar className="w-8 h-8">
-                        <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-                          {getInitials(friend.fullName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      {friend.isOnline && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-aqua rounded-full border-2 border-card" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{friend.fullName}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {friend.isOnline ? "Đang hoạt động" : "Ngoại tuyến"}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleCloseChat(friend.id)}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <div className="flex-1 max-h-72 overflow-y-auto p-3 space-y-2 bg-muted/20">
-                  {isLoading && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Đang tải tin nhắn...
-                    </div>
-                  )}
-                  {!isLoading && messages.length === 0 && (
-                    <p className="text-xs text-muted-foreground">Chưa có tin nhắn.</p>
-                  )}
-                  {!isLoading &&
-                    messages.map((message) => {
-                      const isOwn = message.senderId === currentUserId;
-
-                      return (
-                        <div
-                          key={message.id}
-                          className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[75%] rounded-2xl px-3 py-2 text-xs shadow-sm ${
-                              isOwn
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-card text-foreground border border-border"
-                            }`}
-                          >
-                            <p>{message.content}</p>
-                            <p
-                              className={`mt-1 text-[10px] ${
-                                isOwn ? "text-primary-foreground/80" : "text-muted-foreground"
-                              }`}
-                            >
-                              {formatRelativeTime(message.createdAt)}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-
-                <div className="border-t border-border p-2 flex items-center gap-2">
-                  <input
-                    value={messageDrafts[friend.id] ?? ""}
-                    onChange={(event) => handleMessageDraftChange(friend.id, event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void handleSendMessage(friend.id);
-                      }
-                    }}
-                    placeholder="Nhập tin nhắn..."
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => void handleSendMessage(friend.id)}
-                    disabled={isSending || !(messageDrafts[friend.id] ?? "").trim()}
-                  >
-                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </AppLayout>
   );
 };

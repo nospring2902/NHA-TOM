@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { searchGlobal, type SearchResult } from "@/lib/search";
 import { getApiErrorMessage } from "@/lib/device-binding";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const getInitials = (name: string): string => {
   const parts = name
@@ -143,9 +144,11 @@ const SearchBar = () => {
                       }}
                       className="w-full flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-muted text-left"
                     >
-                      <div className="h-8 w-8 rounded-full bg-secondary text-secondary-foreground text-xs flex items-center justify-center">
-                        {getInitials(user.fullName)}
-                      </div>
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                          {getInitials(user.fullName)}
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
                         <p className="text-sm font-medium text-foreground">{user.fullName}</p>
                         <p className="text-[11px] text-muted-foreground">{user.email}</p>

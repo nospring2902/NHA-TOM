@@ -96,11 +96,15 @@ export const rejectFriendRequest = async (
 
 export const listMessages = async (
   friendId: string,
-  limit = 50,
+  params?: {
+    limit?: number;
+    cursor?: string;
+  },
 ): Promise<ApiEnvelope<MessageItem[]>> => {
   const response = await http.get<ApiEnvelope<MessageItem[]>>(`/friends/${friendId}/messages`, {
     params: {
-      limit,
+      limit: params?.limit ?? 50,
+      cursor: params?.cursor,
     },
   });
   return response.data;

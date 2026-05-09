@@ -12,13 +12,27 @@ export type AuthSession = {
 };
 
 const AUTH_STORAGE_KEY = 'nhatom.auth.session';
+const authListeners = new Set<() => void>();
+
+const notifyAuthListeners = () => {
+  authListeners.forEach((listener) => listener());
+};
 
 export const saveAuthSession = (session: AuthSession) => {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  notifyAuthListeners();
 };
 
 export const clearAuthSession = () => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  notifyAuthListeners();
+};
+
+export const subscribeAuthSession = (listener: () => void) => {
+  authListeners.add(listener);
+  return () => {
+    authListeners.delete(listener);
+  };
 };
 
 export const getAuthSession = (): AuthSession | null => {

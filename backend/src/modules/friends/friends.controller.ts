@@ -62,9 +62,10 @@ export class FriendsController {
     @Param('friendId') friendId: string,
     @Query('limit') limit = '50',
     @Req() req: Request,
+    @Query('cursor') cursor?: string,
   ) {
     const userId = this.authContextService.requireCurrentUserId(req);
-    return this.friendsService.listMessages(userId, friendId, Number(limit));
+    return this.friendsService.listMessages(userId, friendId, Number(limit), cursor);
   }
 
   @Post(':friendId/messages')

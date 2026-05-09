@@ -12,6 +12,8 @@ import {
 } from "@/lib/friends";
 import { getApiErrorMessage } from "@/lib/device-binding";
 import { useRealtime } from "@/contexts/RealtimeContext";
+import { getAccessToken, subscribeAuthSession } from "@/lib/auth";
+import { toast } from "@/hooks/use-toast";
 
 type FriendsContextValue = {
   friends: FriendItem[];
@@ -36,6 +38,7 @@ const FriendsContext = createContext<FriendsContextValue | undefined>(undefined)
 
 export const FriendsProvider = ({ children }: { children: React.ReactNode }) => {
   const { socket } = useRealtime();
+  const [authVersion, setAuthVersion] = useState(0);
   const [friends, setFriends] = useState<FriendItem[]>([]);
   const [suggestions, setSuggestions] = useState<FriendSuggestion[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
@@ -48,6 +51,13 @@ export const FriendsProvider = ({ children }: { children: React.ReactNode }) => 
   const [isLoadingRequests, setIsLoadingRequests] = useState(true);
 
   const refreshFriends = useCallback(async () => {
+    if (!getAccessToken()) {
+      setFriends([]);
+      setFriendsError(null);
+      setIsLoadingFriends(false);
+      return;
+    }
+
     setIsLoadingFriends(true);
     setFriendsError(null);
 
@@ -62,6 +72,13 @@ export const FriendsProvider = ({ children }: { children: React.ReactNode }) => 
   }, []);
 
   const refreshSuggestions = useCallback(async () => {
+    if (!getAccessToken()) {
+      setSuggestions([]);
+      setSuggestionsError(null);
+      setIsLoadingSuggestions(false);
+      return;
+    }
+
     setIsLoadingSuggestions(true);
     setSuggestionsError(null);
 
@@ -76,6 +93,13 @@ export const FriendsProvider = ({ children }: { children: React.ReactNode }) => 
   }, []);
 
   const refreshRequests = useCallback(async () => {
+    if (!getAccessToken()) {
+      setRequests([]);
+      setRequestsError(null);
+      setIsLoadingRequests(false);
+      return;
+    }
+
     setIsLoadingRequests(true);
     setRequestsError(null);
 
@@ -90,10 +114,29 @@ export const FriendsProvider = ({ children }: { children: React.ReactNode }) => 
   }, []);
 
   useEffect(() => {
+    return subscribeAuthSession(() => {
+      setAuthVersion((current) => current + 1);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!getAccessToken()) {
+      setFriends([]);
+      setSuggestions([]);
+      setRequests([]);
+      setFriendsError(null);
+      setSuggestionsError(null);
+      setRequestsError(null);
+      setIsLoadingFriends(false);
+      setIsLoadingSuggestions(false);
+      setIsLoadingRequests(false);
+      return;
+    }
+
     void refreshFriends();
     void refreshSuggestions();
     void refreshRequests();
-  }, [refreshFriends, refreshRequests, refreshSuggestions]);
+  }, [authVersion, refreshFriends, refreshRequests, refreshSuggestions]);
 
   useEffect(() => {
     if (!socket) {
@@ -148,16 +191,12 @@ export const FriendsProvider = ({ children }: { children: React.ReactNode }) => 
       });
 
       setRequests((current) => current.filter((request) => request.requester.id !== payload.friend?.id));
-      setSuggestions((current) =>
-        current.map((item) =>
-          item.id === payload.friend?.id
-            ? {
-                ...item,
-                isRequested: false,
-              }
-            : item,
-        ),
-      );
+      setSuggestions((current) => current.filter((item) => item.id !== payload.friend?.id));
+
+      toast({
+        title: "Kết bạn thành công",
+        description: `Bạn đã kết bạn với ${payload.friend.fullName}`,
+      });
     };
 
     const handleFriendRejected = (payload: { userId?: string }) => {
@@ -175,6 +214,12 @@ export const FriendsProvider = ({ children }: { children: React.ReactNode }) => 
             : item,
         ),
       );
+
+      toast({
+        title: "Lời mời bị từ chối",
+        description: "Người dùng đã từ chối lời mời kết bạn.",
+        variant: "destructive",
+      });
     };
 
     socket.on("presence:sync", handlePresenceSync);
