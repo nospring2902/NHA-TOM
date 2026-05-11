@@ -137,6 +137,19 @@ export class DashboardService {
 
     const score = this.calculateWaterScore(latest);
 
+    if (score == null) {
+      return {
+        success: true,
+        message: 'Chưa đủ dữ liệu để tính chỉ số chất lượng nước',
+        data: {
+          pondId,
+          score: null,
+          level: 'unknown',
+          measuredAt: latest.updatedAt,
+        },
+      };
+    }
+
     return {
       success: true,
       message: 'Water score',
@@ -154,32 +167,64 @@ export class DashboardService {
     dissolvedOxygen: number | null;
     temperature: number | null;
     salinity: number | null;
-  }): number {
-    const phPenalty = this.rangePenalty(metrics.ph, 7.5, 8.5, 1.0);
-    const doPenalty = this.rangePenalty(metrics.dissolvedOxygen, 5.0, 8.0, 1.4);
-    const tempPenalty = this.rangePenalty(metrics.temperature, 26, 31, 0.8);
-    const salinityPenalty = this.rangePenalty(metrics.salinity, 15, 25, 0.6);
+  }): number | null {
+    const awqi = this.calculateAwqi(metrics);
 
-    const score = Math.round(Math.max(0, 100 - phPenalty - doPenalty - tempPenalty - salinityPenalty));
+    if (awqi == null) {
+      return null;
+    }
+
+    const score = Math.round(Math.max(0, Math.min(100, 100 - awqi)));
     return score;
   }
 
-  private rangePenalty(
+  private calculateAwqi(metrics: {
+    ph: number | null;
+    dissolvedOxygen: number | null;
+    temperature: number | null;
+    salinity: number | null;
+  }): number | null {
+    const factors = [
+      this.buildAwqiFactor(metrics.ph, 8.0, 8.5, 1 / 8.5, true),
+      this.buildAwqiFactor(metrics.dissolvedOxygen, 14.6, 5.0, 1 / 5.0, false),
+      this.buildAwqiFactor(metrics.temperature, 28.5, 31.0, 1 / 31.0, true),
+      this.buildAwqiFactor(metrics.salinity, 20.0, 25.0, 1 / 25.0, true),
+    ].filter((factor): factor is { rating: number; weight: number } => factor != null);
+
+    if (factors.length === 0) {
+      return null;
+    }
+
+    const weightSum = factors.reduce((sum, factor) => sum + factor.weight, 0);
+    const ratingSum = factors.reduce((sum, factor) => sum + factor.rating * factor.weight, 0);
+    const awqi = ratingSum / weightSum;
+
+    return Math.max(0, Math.min(100, awqi));
+  }
+
+  private buildAwqiFactor(
     value: number | null,
-    min: number,
-    max: number,
+    ideal: number,
+    standard: number,
     weight: number,
-  ): number {
+    useAbsolute: boolean,
+  ): { rating: number; weight: number } | null {
     if (value == null) {
-      return 12;
+      return null;
     }
 
-    if (value >= min && value <= max) {
-      return 0;
+    const denominator = standard - ideal;
+    if (denominator === 0) {
+      return null;
     }
 
-    const distance = value < min ? min - value : value - max;
-    return Math.min(25, distance * 10 * weight);
+    const numerator = useAbsolute ? Math.abs(value - ideal) : value - ideal;
+    const rating = Math.max(0, (numerator / denominator) * 100);
+
+    return {
+      rating,
+      weight,
+    };
   }
 
   private resolveScoreLevel(score: number | null) {
