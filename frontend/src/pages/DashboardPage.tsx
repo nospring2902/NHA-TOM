@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Droplets, Thermometer, Wind, Gauge, Power, ArrowLeft, CloudRain, Sun, AlertTriangle, Download, Activity, CheckCircle2, Bot } from "lucide-react";
+import { Droplets, Thermometer, Wind, Gauge, Power, ArrowLeft, CloudRain, Sun, AlertTriangle, Download, Activity, CheckCircle2, Bot, CalendarClock, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -32,6 +32,72 @@ const SCORE_BADGE_CLASS: Record<DashboardRealtime["level"], string> = {
   fair: "text-coral bg-coral/10",
   poor: "text-destructive bg-destructive/10",
 };
+
+type WaterQualityForecast = {
+  horizon: "tomorrow" | "next_3_days" | "next_7_days";
+  label: string;
+  level: DashboardRealtime["level"];
+  score: number | null;
+  confidence: number;
+  trend: "up" | "down" | "stable";
+  summary: string;
+  note: string;
+  risks: string[];
+};
+
+const FORECAST_TREND_LABEL: Record<WaterQualityForecast["trend"], string> = {
+  up: "Cải thiện",
+  down: "Giảm",
+  stable: "Ổn định",
+};
+
+const FORECAST_TREND_CLASS: Record<WaterQualityForecast["trend"], string> = {
+  up: "text-aqua",
+  down: "text-coral",
+  stable: "text-muted-foreground",
+};
+
+const FORECAST_TREND_ICON: Record<WaterQualityForecast["trend"], typeof TrendingUp> = {
+  up: TrendingUp,
+  down: TrendingDown,
+  stable: Minus,
+};
+
+const mockForecasts: WaterQualityForecast[] = [
+  {
+    horizon: "tomorrow",
+    label: "Ngày mai",
+    level: "good",
+    score: 78,
+    confidence: 82,
+    trend: "up",
+    summary: "Ổn định, ít dao động",
+    note: "Oxy hòa tan giữ mức tốt, nhiệt độ dịu hơn buổi trưa.",
+    risks: ["Mưa rào nhẹ", "Tăng đột biến pH buổi chiều"],
+  },
+  {
+    horizon: "next_3_days",
+    label: "3 ngày tới",
+    level: "fair",
+    score: 68,
+    confidence: 71,
+    trend: "stable",
+    summary: "Dao động nhẹ, cần theo dõi",
+    note: "Khả năng mưa lớn làm giảm độ mặn và nhiệt độ vào chiều tối.",
+    risks: ["Gió mạnh", "DO giảm ban đêm"],
+  },
+  {
+    horizon: "next_7_days",
+    label: "7 ngày tới",
+    level: "poor",
+    score: 54,
+    confidence: 63,
+    trend: "down",
+    summary: "Rủi ro tăng",
+    note: "Nhiệt độ và độ mặn biến động, cần kế hoạch sục khí bổ sung.",
+    risks: ["Nắng nóng kéo dài", "Tăng amoniac"],
+  },
+];
 
 const activityLog = [
   { time: "20:15", action: "Máy sục khí BẬT", trigger: "Oxy thấp (tự động)" },
@@ -266,6 +332,55 @@ const DashboardPage = () => {
           )}
         </div>
 
+        {/* Forecast */}
+        <div className="bg-card rounded-xl border border-border shadow-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Dự đoán chất lượng nước</h2>
+              <p className="text-xs text-muted-foreground">Mock data để xem giao diện trước khi tích hợp AI</p>
+            </div>
+            <CalendarClock className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {mockForecasts.map((forecast) => {
+              const TrendIcon = FORECAST_TREND_ICON[forecast.trend];
+              return (
+                <div key={forecast.horizon} className="rounded-xl border border-border/70 bg-muted/40 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">{forecast.label}</p>
+                    <span
+                      className={`text-[10px] font-medium px-2 py-1 rounded-full ${SCORE_BADGE_CLASS[forecast.level]}`}
+                    >
+                      {SCORE_LABEL[forecast.level]}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-2xl font-bold text-foreground">
+                        {forecast.score ?? "--"}
+                        <span className="text-xs text-muted-foreground">/100</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">{forecast.summary}</p>
+                    </div>
+                    <div className={`flex items-center gap-1 text-xs font-medium ${FORECAST_TREND_CLASS[forecast.trend]}`}>
+                      <TrendIcon className="w-4 h-4" />
+                      {FORECAST_TREND_LABEL[forecast.trend]}
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{forecast.note}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {forecast.risks.map((risk) => (
+                      <span key={risk} className="text-[10px] px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
+                        {risk}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Sensor cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {sensorCards.map((s) => (
@@ -399,7 +514,7 @@ const DashboardPage = () => {
               ))}
             </div>
 
-            <div className="mt-5 border-t border-border pt-4">
+            {/* <div className="mt-5 border-t border-border pt-4">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">Thiết bị IoT đã kết nối</p>
@@ -434,7 +549,7 @@ const DashboardPage = () => {
                   ))}
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
 
           {/* Activity Log */}
