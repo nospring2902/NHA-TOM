@@ -21,4 +21,10 @@ export class DashboardController {
     const userId = this.authContextService.requireCurrentUserId(req);
     return this.dashboardService.realtime(pondId, userId);
   }
+
+  @Get('forecast')
+  forecast(@Param('pondId') pondId: string, @Req() req: Request) {
+    const userId = this.authContextService.requireCurrentUserId(req);
+    return this.dashboardService.forecast(pondId, userId);
+  }
 }

@@ -9,6 +9,7 @@ const THINGSBOARD_BASE_URL = (
 const INTERVAL_MS = Number(process.env.SIMULATOR_INTERVAL_MS || 5000);
 const BASE_LATITUDE = Number(process.env.SIMULATOR_BASE_LATITUDE || 9.1765);
 const BASE_LONGITUDE = Number(process.env.SIMULATOR_BASE_LONGITUDE || 105.1524);
+const OUTLIER_PROB = Number(process.env.SIMULATOR_OUTLIER_PROB || 0.05);
 
 // Fallback token list. You can edit directly for quick local tests.
 const STATIC_ACCESS_TOKENS = ["LaQSXKgexmSdkS5fCkWj", "SHoW3rBot288omdKhea3", "gKwHz7p2OOw239zWSXVu"];
@@ -76,6 +77,16 @@ function rand(min, max, precision = 2) {
   return Number(value.toFixed(precision));
 }
 
+function sampleWithOutlier(optMin, optMax, lowMin, lowMax, highMin, highMax, precision = 2) {
+  const useOutlier = Math.random() < OUTLIER_PROB;
+  if (!useOutlier) {
+    return rand(optMin, optMax, precision);
+  }
+
+  const useLow = Math.random() < 0.5;
+  return useLow ? rand(lowMin, lowMax, precision) : rand(highMin, highMax, precision);
+}
+
 function hashToken(token) {
   let hash = 0;
 
@@ -107,9 +118,11 @@ function buildPayload(token) {
   const location = resolveDeviceLocation(token);
 
   return {
-    temperature: rand(25, 30),
-    ph: rand(6.5, 8.5),
-    dissolved_oxygen: rand(4, 7),
+    // Mostly keep values in ideal ranges, with rare outliers to trigger alerts.
+    temperature: sampleWithOutlier(28, 30, 26.5, 27.5, 30.5, 32, 2),
+    ph: sampleWithOutlier(7.8, 8.2, 7.2, 7.6, 8.4, 8.8, 2),
+    dissolved_oxygen: sampleWithOutlier(5.5, 7.0, 4.6, 5.2, 7.2, 8.0, 2),
+    salinity: sampleWithOutlier(15, 25, 10, 14, 26, 30, 1),
     latitude: location.latitude,
     longitude: location.longitude,
   };

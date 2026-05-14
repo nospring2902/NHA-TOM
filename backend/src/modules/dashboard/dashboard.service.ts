@@ -1,9 +1,14 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { AiForecastService } from './ai-forecast.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly aiForecastService: AiForecastService,
+  ) {}
 
   async realtime(pondId: string, userId: string) {
     await this.assertPondOwnership(pondId, userId);
@@ -162,6 +167,58 @@ export class DashboardService {
     };
   }
 
+  async forecast(pondId: string, userId: string) {
+    await this.assertPondOwnership(pondId, userId);
+
+    const lookbackDays = this.getAiLookbackDays();
+    const fromDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+
+    const dailyRows = await this.prisma.$queryRaw<
+      Array<{
+        day: Date;
+        ph: number | null;
+        dissolvedOxygen: number | null;
+        temperature: number | null;
+        salinity: number | null;
+      }>
+    >(Prisma.sql`
+      SELECT
+        date_trunc('day', "tsUtc") AS day,
+        avg("ph") AS ph,
+        avg("dissolvedOxygen") AS "dissolvedOxygen",
+        avg("temperature") AS temperature,
+        avg("salinity") AS salinity
+      FROM "pond_metric_snapshots"
+      WHERE "pondId" = ${pondId}
+        AND "tsUtc" >= ${fromDate}
+      GROUP BY day
+      ORDER BY day ASC
+    `);
+
+    const forecast = await this.aiForecastService.predict(dailyRows);
+
+    const horizons = forecast.horizons.map((horizon) => {
+      const score = this.calculateWaterScore(horizon.metrics);
+      const level = this.resolveScoreLevel(score);
+      return {
+        day: horizon.day,
+        score,
+        level,
+        metrics: horizon.metrics,
+      };
+    });
+
+    return {
+      success: true,
+      message: 'Forecast daily averages',
+      data: {
+        pondId,
+        generatedAt: forecast.generatedAt,
+        horizons,
+      },
+    };
+  }
+
   private calculateWaterScore(metrics: {
     ph: number | null;
     dissolvedOxygen: number | null;
@@ -185,10 +242,10 @@ export class DashboardService {
     salinity: number | null;
   }): number | null {
     const factors = [
-      this.buildAwqiFactor(metrics.ph, 8.0, 8.5, 1 / 8.5, true),
-      this.buildAwqiFactor(metrics.dissolvedOxygen, 14.6, 5.0, 1 / 5.0, false),
-      this.buildAwqiFactor(metrics.temperature, 28.5, 31.0, 1 / 31.0, true),
-      this.buildAwqiFactor(metrics.salinity, 20.0, 25.0, 1 / 25.0, true),
+      this.buildRangeFactor(metrics.ph, 7.8, 8.2, 7.2, 8.8, 1.0),
+      this.buildRangeFactor(metrics.dissolvedOxygen, 5.5, 7.0, 4.6, 8.0, 1.3),
+      this.buildRangeFactor(metrics.temperature, 28.0, 30.0, 26.5, 32.0, 1.0),
+      this.buildRangeFactor(metrics.salinity, 15.0, 25.0, 10.0, 30.0, 1.0),
     ].filter((factor): factor is { rating: number; weight: number } => factor != null);
 
     if (factors.length === 0) {
@@ -202,29 +259,37 @@ export class DashboardService {
     return Math.max(0, Math.min(100, awqi));
   }
 
-  private buildAwqiFactor(
+  private buildRangeFactor(
     value: number | null,
-    ideal: number,
-    standard: number,
+    idealLow: number,
+    idealHigh: number,
+    warnLow: number,
+    warnHigh: number,
     weight: number,
-    useAbsolute: boolean,
   ): { rating: number; weight: number } | null {
     if (value == null) {
       return null;
     }
 
-    const denominator = standard - ideal;
-    if (denominator === 0) {
-      return null;
+    if (value >= idealLow && value <= idealHigh) {
+      return { rating: 0, weight };
     }
 
-    const numerator = useAbsolute ? Math.abs(value - ideal) : value - ideal;
-    const rating = Math.max(0, (numerator / denominator) * 100);
+    if (value < idealLow) {
+      const denominator = idealLow - warnLow;
+      if (denominator <= 0) {
+        return null;
+      }
+      const rating = ((idealLow - value) / denominator) * 100;
+      return { rating: Math.min(100, Math.max(0, rating)), weight };
+    }
 
-    return {
-      rating,
-      weight,
-    };
+    const denominator = warnHigh - idealHigh;
+    if (denominator <= 0) {
+      return null;
+    }
+    const rating = ((value - idealHigh) / denominator) * 100;
+    return { rating: Math.min(100, Math.max(0, rating)), weight };
   }
 
   private resolveScoreLevel(score: number | null) {
@@ -245,6 +310,12 @@ export class DashboardService {
     }
 
     return 'poor';
+  }
+
+  private getAiLookbackDays() {
+    const raw = process.env.NHATOM_AI_LOOKBACK_DAYS;
+    const value = raw ? Number(raw) : 60;
+    return Number.isFinite(value) && value > 0 ? value : 60;
   }
 
   private isDeviceOnlineByHeartbeat(lastTelemetryAt: Date | null): boolean {
