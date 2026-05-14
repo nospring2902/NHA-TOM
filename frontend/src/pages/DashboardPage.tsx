@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { AddDeviceModal } from "@/components/AddDeviceModal";
 import { BoundDevice, getApiErrorMessage } from "@/lib/device-binding";
-import { DashboardRealtime, getDashboardRealtime } from "@/lib/dashboard";
+import { DashboardForecast, DashboardRealtime, getDashboardForecast, getDashboardRealtime } from "@/lib/dashboard";
 
 const STATUS_LABEL: Record<BoundDevice["status"], string> = {
   INACTIVE: "Chưa kích hoạt",
@@ -38,11 +38,13 @@ type WaterQualityForecast = {
   label: string;
   level: DashboardRealtime["level"];
   score: number | null;
-  confidence: number;
   trend: "up" | "down" | "stable";
-  summary: string;
-  note: string;
-  risks: string[];
+  metrics: {
+    ph: number | null;
+    dissolvedOxygen: number | null;
+    temperature: number | null;
+    salinity: number | null;
+  };
 };
 
 const FORECAST_TREND_LABEL: Record<WaterQualityForecast["trend"], string> = {
@@ -63,41 +65,17 @@ const FORECAST_TREND_ICON: Record<WaterQualityForecast["trend"], typeof Trending
   stable: Minus,
 };
 
-const mockForecasts: WaterQualityForecast[] = [
-  {
-    horizon: "tomorrow",
-    label: "Ngày mai",
-    level: "good",
-    score: 78,
-    confidence: 82,
-    trend: "up",
-    summary: "Ổn định, ít dao động",
-    note: "Oxy hòa tan giữ mức tốt, nhiệt độ dịu hơn buổi trưa.",
-    risks: ["Mưa rào nhẹ", "Tăng đột biến pH buổi chiều"],
-  },
-  {
-    horizon: "next_3_days",
-    label: "3 ngày tới",
-    level: "fair",
-    score: 68,
-    confidence: 71,
-    trend: "stable",
-    summary: "Dao động nhẹ, cần theo dõi",
-    note: "Khả năng mưa lớn làm giảm độ mặn và nhiệt độ vào chiều tối.",
-    risks: ["Gió mạnh", "DO giảm ban đêm"],
-  },
-  {
-    horizon: "next_7_days",
-    label: "7 ngày tới",
-    level: "poor",
-    score: 54,
-    confidence: 63,
-    trend: "down",
-    summary: "Rủi ro tăng",
-    note: "Nhiệt độ và độ mặn biến động, cần kế hoạch sục khí bổ sung.",
-    risks: ["Nắng nóng kéo dài", "Tăng amoniac"],
-  },
-];
+const horizonLabel = (day: number): { horizon: WaterQualityForecast["horizon"]; label: string } => {
+  if (day <= 1) {
+    return { horizon: "tomorrow", label: "Ngày mai" };
+  }
+
+  if (day <= 3) {
+    return { horizon: "next_3_days", label: "3 ngày tới" };
+  }
+
+  return { horizon: "next_7_days", label: "7 ngày tới" };
+};
 
 const activityLog = [
   { time: "20:15", action: "Máy sục khí BẬT", trigger: "Oxy thấp (tự động)" },
@@ -116,6 +94,9 @@ const DashboardPage = () => {
   const [realtime, setRealtime] = useState<DashboardRealtime | null>(null);
   const [isRealtimeLoading, setIsRealtimeLoading] = useState(true);
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
+  const [forecast, setForecast] = useState<DashboardForecast | null>(null);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+  const [isForecastLoading, setIsForecastLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -168,6 +149,37 @@ const DashboardPage = () => {
     return () => {
       mounted = false;
       window.clearInterval(timer);
+    };
+  }, [pondId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadForecast = async () => {
+      setIsForecastLoading(true);
+      try {
+        const response = await getDashboardForecast(pondId);
+        if (!mounted) {
+          return;
+        }
+        setForecast(response.data);
+        setForecastError(null);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        setForecastError(getApiErrorMessage(error, "Không thể tải dữ liệu dự báo"));
+      } finally {
+        if (mounted) {
+          setIsForecastLoading(false);
+        }
+      }
+    };
+
+    void loadForecast();
+
+    return () => {
+      mounted = false;
     };
   }, [pondId]);
 
@@ -235,6 +247,34 @@ const DashboardPage = () => {
       })),
     [realtime?.metricsHistory],
   );
+
+  const forecastCards = useMemo<WaterQualityForecast[]>(() => {
+    if (!forecast?.horizons?.length) {
+      return [];
+    }
+
+    return forecast.horizons.map((item, index) => {
+      const { horizon, label } = horizonLabel(item.day);
+      const previous = forecast.horizons[index - 1]?.score;
+      const trend =
+        item.score != null && previous != null
+          ? item.score - previous >= 2
+            ? "up"
+            : item.score - previous <= -2
+              ? "down"
+              : "stable"
+          : "stable";
+
+      return {
+        horizon,
+        label,
+        level: item.level,
+        score: item.score,
+        trend,
+        metrics: item.metrics,
+      };
+    });
+  }, [forecast]);
 
   const alerts = useMemo(() => {
     const realtimeAlerts: Array<{ type: "warning" | "info"; message: string; time: string }> = [];
@@ -337,12 +377,12 @@ const DashboardPage = () => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Dự đoán chất lượng nước</h2>
-              <p className="text-xs text-muted-foreground">Mock data để xem giao diện trước khi tích hợp AI</p>
+              <p className="text-xs text-muted-foreground">Dự báo trung bình theo ngày từ mô hình AI</p>
             </div>
             <CalendarClock className="w-5 h-5 text-muted-foreground" />
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            {mockForecasts.map((forecast) => {
+            {forecastCards.map((forecast) => {
               const TrendIcon = FORECAST_TREND_ICON[forecast.trend];
               return (
                 <div key={forecast.horizon} className="rounded-xl border border-border/70 bg-muted/40 p-4">
@@ -360,24 +400,45 @@ const DashboardPage = () => {
                         {forecast.score ?? "--"}
                         <span className="text-xs text-muted-foreground">/100</span>
                       </p>
-                      <p className="text-xs text-muted-foreground">{forecast.summary}</p>
+                      <p className="text-xs text-muted-foreground">Dự báo trung bình theo ngày</p>
                     </div>
                     <div className={`flex items-center gap-1 text-xs font-medium ${FORECAST_TREND_CLASS[forecast.trend]}`}>
                       <TrendIcon className="w-4 h-4" />
                       {FORECAST_TREND_LABEL[forecast.trend]}
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{forecast.note}</p>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {forecast.risks.map((risk) => (
-                      <span key={risk} className="text-[10px] px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
-                        {risk}
-                      </span>
-                    ))}
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    <div>
+                      pH: {forecast.metrics.ph == null ? "--" : forecast.metrics.ph.toFixed(2)}
+                    </div>
+                    <div>
+                      DO: {forecast.metrics.dissolvedOxygen == null ? "--" : forecast.metrics.dissolvedOxygen.toFixed(2)}
+                    </div>
+                    <div>
+                      Nhiệt: {forecast.metrics.temperature == null ? "--" : forecast.metrics.temperature.toFixed(1)}°C
+                    </div>
+                    <div>
+                      Độ mặn: {forecast.metrics.salinity == null ? "--" : forecast.metrics.salinity.toFixed(1)}‰
+                    </div>
                   </div>
                 </div>
               );
             })}
+            {isForecastLoading && (
+              <div className="rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground">
+                Đang tải dữ liệu dự báo...
+              </div>
+            )}
+            {!isForecastLoading && forecastCards.length === 0 && (
+              <div className="rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground">
+                Chưa có dữ liệu dự báo cho ao này.
+              </div>
+            )}
+            {forecastError && (
+              <div className="rounded-xl border border-dashed border-destructive/40 p-4 text-xs text-destructive">
+                {forecastError}
+              </div>
+            )}
           </div>
         </div>
 

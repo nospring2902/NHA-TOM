@@ -36,11 +36,41 @@ export type DashboardRealtime = {
   devices: RealtimeDevice[];
 };
 
+export type ForecastMetrics = {
+  ph: number | null;
+  dissolvedOxygen: number | null;
+  temperature: number | null;
+  salinity: number | null;
+};
+
+export type ForecastHorizon = {
+  day: number;
+  score: number | null;
+  level: 'unknown' | 'excellent' | 'good' | 'fair' | 'poor';
+  metrics: ForecastMetrics;
+};
+
+export type DashboardForecast = {
+  pondId: string;
+  generatedAt: string;
+  horizons: ForecastHorizon[];
+};
+
 export const getDashboardRealtime = async (
   pondId: string,
 ): Promise<ApiEnvelope<DashboardRealtime>> => {
   const response = await http.get<ApiEnvelope<DashboardRealtime>>(
     `/ponds/${pondId}/dashboard/realtime`,
+  );
+
+  return response.data;
+};
+
+export const getDashboardForecast = async (
+  pondId: string,
+): Promise<ApiEnvelope<DashboardForecast>> => {
+  const response = await http.get<ApiEnvelope<DashboardForecast>>(
+    `/ponds/${pondId}/dashboard/forecast`,
   );
 
   return response.data;
