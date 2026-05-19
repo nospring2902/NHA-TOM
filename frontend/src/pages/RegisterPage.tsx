@@ -1,37 +1,23 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Droplets, User, Mail, Lock, Phone, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Droplets, User, Mail, Lock, Phone, Calendar, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import VerificationStepper from "@/components/VerificationStepper";
 import { toast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/device-binding";
-import { saveAuthSession } from "@/lib/auth";
 import { http } from "@/lib/http";
+import { saveVerificationSession } from "@/lib/verification";
 
 type RegisterResponse = {
   success: boolean;
   message: string;
   data: {
-    accessToken: string;
-    refreshToken: string;
-    user: {
-      id: string;
-      email: string;
-      fullName: string;
-      role: string;
-    };
-  };
-};
-
-type MeResponse = {
-  success: boolean;
-  message: string;
-  data: {
-    id: string;
     email: string;
-    fullName: string;
-    role: string;
+    phone: string | null;
+    emailSent?: boolean;
+    phoneSent?: boolean;
   };
 };
 
@@ -42,47 +28,33 @@ const RegisterPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
-    setIsSubmitting(true);
 
+    setIsSubmitting(true);
     try {
-      const registerResponse = await http.post<RegisterResponse>("/auth/register", {
+      const response = await http.post<RegisterResponse>("/auth/register", {
         fullName: fullName.trim(),
+        phone: phone.trim(),
         email: email.trim(),
         password,
-        phone: phone.trim() || undefined,
       });
 
-      const { accessToken, refreshToken } = registerResponse.data.data;
-
-      saveAuthSession({
-        accessToken,
-        refreshToken,
-        user: registerResponse.data.data.user,
-      });
-
-      const meResponse = await http.get<MeResponse>("/auth/me");
-
-      saveAuthSession({
-        accessToken,
-        refreshToken,
-        user: meResponse.data.data,
+      saveVerificationSession({
+        email: response.data.data.email,
+        phone: response.data.data.phone ?? phone.trim(),
       });
 
       toast({
         title: "Đăng ký thành công",
-        description: `Xin chào ${meResponse.data.data.fullName}`,
+        description: "Vui lòng xác minh email và số điện thoại.",
       });
 
-      navigate("/dashboard");
+      navigate("/verify-email");
     } catch (error) {
       const message = getApiErrorMessage(error, "Đăng ký thất bại");
-      setErrorMessage(message);
       toast({
         title: "Đăng ký thất bại",
         description: message,
@@ -99,13 +71,15 @@ const RegisterPage = () => {
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <Droplets className="w-8 h-8 text-primary" />
-            <span className="text-2xl font-bold text-foreground">Nhà tôm </span>
+            <span className="text-2xl font-bold text-foreground">AquaShrimp</span>
           </Link>
           <h1 className="text-2xl font-bold text-foreground">Tạo tài khoản</h1>
           <p className="text-muted-foreground mt-1">Bắt đầu giám sát ao tôm của bạn</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-card rounded-xl border border-border shadow-card p-6 space-y-4">
+        <div className="bg-card rounded-xl border border-border shadow-card p-6">
+          <VerificationStepper currentStep={1} />
+          <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Họ tên</Label>
@@ -129,6 +103,7 @@ const RegisterPage = () => {
                   className="pl-10"
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
+                  required
                 />
               </div>
             </div>
@@ -167,7 +142,18 @@ const RegisterPage = () => {
             </div>
           </div>
 
-          {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Ngày sinh</Label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input type="date" className="pl-10" />
+              </div>
+            </div>
+            
+          </div>
+
+          
 
           <Button
             type="submit"
@@ -189,7 +175,9 @@ const RegisterPage = () => {
             <Link to="/login" className="text-primary font-medium hover:underline">Đăng nhập</Link>
           </p>
         </form>
+        </div>
       </div>
+
     </div>
   );
 };

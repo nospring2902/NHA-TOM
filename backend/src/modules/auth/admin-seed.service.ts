@@ -12,6 +12,8 @@ export class AdminSeedService implements OnModuleInit {
     const adminEmail = 'nhatom@gmail.com';
     const adminFullName = 'admin';
     const adminPassword = '123456789';
+    const adminPhone = process.env.ADMIN_BOOTSTRAP_PHONE?.trim();
+    const now = new Date();
 
     await this.prisma.user.updateMany({
       where: {
@@ -34,11 +36,21 @@ export class AdminSeedService implements OnModuleInit {
         fullName: adminFullName,
         passwordHash: createUserPasswordHash(adminPassword),
         role: 'ADMIN',
+        phone: adminPhone || null,
+        emailVerifiedAt: now,
+        phoneVerifiedAt: adminPhone ? now : null,
       },
       update: {
         fullName: adminFullName,
         passwordHash: createUserPasswordHash(adminPassword),
         role: 'ADMIN',
+        emailVerifiedAt: now,
+        ...(adminPhone
+          ? {
+              phone: adminPhone,
+              phoneVerifiedAt: now,
+            }
+          : {}),
       },
     });
 

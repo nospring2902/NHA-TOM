@@ -24,6 +24,7 @@ export class UsersService {
         id: user.id,
         fullName: user.fullName,
         email: user.email,
+        phone: user.phone,
         role: user.role,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -32,13 +33,30 @@ export class UsersService {
   }
 
   async updateMe(userId: string, payload: UpdateMeDto) {
+    const nextData: {
+      fullName?: string;
+      phone?: string | null;
+      phoneVerifiedAt?: Date | null;
+      phoneVerificationCodeHash?: string | null;
+      phoneVerificationExpiresAt?: Date | null;
+    } = {};
+
+    if (payload.fullName) {
+      nextData.fullName = payload.fullName.trim();
+    }
+
+    if (payload.phone) {
+      nextData.phone = payload.phone.trim();
+      nextData.phoneVerifiedAt = null;
+      nextData.phoneVerificationCodeHash = null;
+      nextData.phoneVerificationExpiresAt = null;
+    }
+
     const updated = await this.prisma.user.update({
       where: {
         id: userId,
       },
-      data: {
-        fullName: payload.fullName?.trim(),
-      },
+      data: nextData,
     });
 
     return {
@@ -48,6 +66,7 @@ export class UsersService {
         id: updated.id,
         fullName: updated.fullName,
         email: updated.email,
+        phone: updated.phone,
         role: updated.role,
         updatedAt: updated.updatedAt,
       },
@@ -70,6 +89,7 @@ export class UsersService {
         id: user.id,
         fullName: user.fullName,
         email: user.email,
+        phone: user.phone,
         role: user.role,
         createdAt: user.createdAt,
       },

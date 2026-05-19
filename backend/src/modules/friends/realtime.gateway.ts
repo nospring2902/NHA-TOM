@@ -10,6 +10,7 @@ import {
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 import { TokenService } from '../auth/token.service';
+import { VerificationService } from '../auth/verification.service';
 import { FriendsService } from './friends.service';
 import { PresenceService } from './presence.service';
 import { RealtimeService } from './realtime.service';
@@ -29,6 +30,7 @@ export class RealtimeGateway
 
   constructor(
     private readonly tokenService: TokenService,
+    private readonly verificationService: VerificationService,
     private readonly friendsService: FriendsService,
     private readonly presenceService: PresenceService,
     private readonly realtimeService: RealtimeService,
@@ -38,8 +40,8 @@ export class RealtimeGateway
     this.realtimeService.setServer(server);
   }
 
-  handleConnection(client: Socket) {
-    const userId = this.resolveUserId(client);
+  async handleConnection(client: Socket) {
+    const userId = await this.resolveUserId(client);
     if (!userId) {
       client.disconnect(true);
       return;
@@ -109,14 +111,19 @@ export class RealtimeGateway
     };
   }
 
-  private resolveUserId(client: Socket): string | null {
+  private async resolveUserId(client: Socket): Promise<string | null> {
     const token = this.extractToken(client);
     if (!token) {
       return null;
     }
 
     const claims = this.tokenService.verifyAccessToken(token);
-    return claims?.sub ?? null;
+    if (!claims?.sub) {
+      return null;
+    }
+
+    const isVerified = await this.verificationService.isUserVerified(claims.sub);
+    return isVerified ? claims.sub : null;
   }
 
   private extractToken(client: Socket): string | null {
