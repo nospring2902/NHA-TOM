@@ -52,7 +52,7 @@ const VerifyEmailPage = () => {
       });
 
       toast.success("Xác minh Gmail thành công");
-      navigate("/verify-phone");
+      navigate("/login");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Xác minh Gmail thất bại"));
     } finally {

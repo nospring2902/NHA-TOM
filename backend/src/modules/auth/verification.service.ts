@@ -3,14 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import type { User } from '@prisma/client';
 import { createHash, randomInt } from 'node:crypto';
 import nodemailer, { type Transporter } from 'nodemailer';
-import twilio, { type Twilio } from 'twilio';
 import { PrismaService } from '../../database/prisma.service';
 
 @Injectable()
 export class VerificationService {
   private readonly logger = new Logger(VerificationService.name);
   private mailTransporter?: Transporter;
-  private twilioClient?: Twilio;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -38,31 +36,6 @@ export class VerificationService {
     }
   }
 
-  async issuePhoneVerification(user: User): Promise<boolean> {
-    if (!user.phone) {
-      return false;
-    }
-
-    const code = this.generateCode();
-    const expiresAt = this.getExpiryDate();
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        phoneVerificationCodeHash: this.hashCode(code),
-        phoneVerificationExpiresAt: expiresAt,
-      },
-    });
-
-    try {
-      await this.sendSmsCode(user.phone, code, expiresAt);
-      return true;
-    } catch (error) {
-      this.logger.error('Failed to send phone verification code', error);
-      return false;
-    }
-  }
-
   async verifyEmailCode(user: User, code: string) {
     if (user.emailVerifiedAt) {
       return;
@@ -80,38 +53,15 @@ export class VerificationService {
     });
   }
 
-  async verifyPhoneCode(user: User, code: string) {
-    if (user.phoneVerifiedAt) {
-      return;
-    }
-
-    if (!user.phone) {
-      throw new BadRequestException('Vui lòng cập nhật số điện thoại trước khi xác minh');
-    }
-
-    this.assertValidCode(code, user.phoneVerificationCodeHash, user.phoneVerificationExpiresAt);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        phoneVerifiedAt: new Date(),
-        phoneVerificationCodeHash: null,
-        phoneVerificationExpiresAt: null,
-      },
-    });
-  }
-
   async isUserVerified(userId: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         emailVerifiedAt: true,
-        phoneVerifiedAt: true,
-        phone: true,
       },
     });
 
-    return Boolean(user?.emailVerifiedAt && user?.phoneVerifiedAt && user?.phone);
+    return Boolean(user?.emailVerifiedAt);
   }
 
   private assertValidCode(code: string, storedHash?: string | null, expiresAt?: Date | null) {
@@ -185,70 +135,5 @@ export class VerificationService {
     });
 
     return this.mailTransporter;
-  }
-
-  private getTwilioClient(): Twilio {
-    if (this.twilioClient) {
-      return this.twilioClient;
-    }
-
-    const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID');
-    const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
-    if (!accountSid || !authToken) {
-      throw new Error('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required to send SMS');
-    }
-
-    this.twilioClient = twilio(accountSid, authToken);
-    return this.twilioClient;
-  }
-
-  private async sendSmsCode(phone: string, code: string, expiresAt: Date) {
-    const from = this.configService.get<string>('TWILIO_FROM');
-    const messagingServiceSid = this.configService.get<string>('TWILIO_MESSAGING_SERVICE_SID');
-    if (!from && !messagingServiceSid) {
-      throw new Error('TWILIO_FROM or TWILIO_MESSAGING_SERVICE_SID is required to send SMS');
-    }
-    const ttlMinutes = this.configService.get<string>('VERIFICATION_CODE_TTL_MINUTES') ?? '10';
-
-    const normalizedPhone = this.normalizeTwilioPhone(phone);
-    if (!normalizedPhone) {
-      throw new BadRequestException('So dien thoai khong hop le');
-    }
-
-    const body = `Ma xac minh NHATOM: ${code}. Hieu luc ${ttlMinutes} phut (den ${expiresAt.toLocaleTimeString()}).`;
-
-    try {
-      const client = this.getTwilioClient();
-      await client.messages.create({
-        to: normalizedPhone,
-        body,
-        ...(messagingServiceSid ? { messagingServiceSid } : { from }),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown Twilio error';
-      this.logger.error(`Twilio error: ${message}`);
-      throw new BadRequestException(`Twilio error: ${message}`);
-    }
-  }
-
-  private normalizeTwilioPhone(phone: string): string {
-    const cleaned = phone.trim().replace(/[^\d+]/g, '');
-    if (!cleaned) {
-      return '';
-    }
-
-    if (cleaned.startsWith('+')) {
-      return cleaned;
-    }
-
-    if (cleaned.startsWith('84')) {
-      return `+${cleaned}`;
-    }
-
-    if (cleaned.startsWith('0')) {
-      return `+84${cleaned.slice(1)}`;
-    }
-
-    return `+84${cleaned}`;
   }
 }

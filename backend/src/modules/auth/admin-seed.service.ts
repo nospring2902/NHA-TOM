@@ -38,7 +38,7 @@ export class AdminSeedService implements OnModuleInit {
         role: 'ADMIN',
         phone: adminPhone || null,
         emailVerifiedAt: now,
-        phoneVerifiedAt: adminPhone ? now : null,
+        // phoneVerifiedAt: adminPhone ? now : null,
       },
       update: {
         fullName: adminFullName,
@@ -48,7 +48,7 @@ export class AdminSeedService implements OnModuleInit {
         ...(adminPhone
           ? {
               phone: adminPhone,
-              phoneVerifiedAt: now,
+              // phoneVerifiedAt: now,
             }
           : {}),
       },

@@ -12,7 +12,6 @@ import { createUserPasswordHash, verifyUserPassword } from '../../utils/password
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
-import { SetPhoneDto } from './dto/set-phone.dto';
 import { TokenService } from './token.service';
 import { VerificationService } from './verification.service';
 
@@ -27,12 +26,7 @@ export class AuthService {
   async register(payload: RegisterDto) {
     const email = payload.email.trim().toLowerCase();
     const fullName = payload.fullName.trim();
-    const phone = payload.phone.trim();
-
-    if (!phone) {
-      throw new BadRequestException('Số điện thoại không hợp lệ');
-    }
-
+    const phone = payload.phone?.trim() ?? null;
     try {
       const user = await this.prisma.$transaction(async (tx) => {
         const adminUser = await tx.user.findFirst({
@@ -48,7 +42,7 @@ export class AuthService {
           data: {
             email,
             fullName,
-            phone,
+            phone: phone ?? undefined,
             passwordHash: createUserPasswordHash(payload.password),
             role: 'FARM_MANAGER',
           },
@@ -73,19 +67,15 @@ export class AuthService {
         return createdUser;
       });
 
-      const [emailSent, phoneSent] = await Promise.all([
-        this.verificationService.issueEmailVerification(user),
-        this.verificationService.issuePhoneVerification(user),
-      ]);
+      const emailSent = await this.verificationService.issueEmailVerification(user);
 
       return {
         success: true,
-        message: 'Đăng ký thành công. Vui lòng xác minh email và số điện thoại',
+        message: 'Đăng ký thành công. Vui lòng xác minh email.',
         data: {
           email: user.email,
           phone: user.phone,
           emailSent,
-          phoneSent,
         },
       };
     } catch (error) {
@@ -111,10 +101,6 @@ export class AuthService {
     if (user.role !== 'ADMIN') {
       if (!user.emailVerifiedAt) {
         throw new ForbiddenException('Vui lòng xác minh email trước khi đăng nhập');
-      }
-
-      if (!user.phone || !user.phoneVerifiedAt) {
-        throw new ForbiddenException('Vui lòng xác minh số điện thoại trước khi đăng nhập');
       }
     }
 
@@ -151,8 +137,8 @@ export class AuthService {
     }
 
     if (session.user.role !== 'ADMIN') {
-      if (!session.user.emailVerifiedAt || !session.user.phoneVerifiedAt || !session.user.phone) {
-        throw new ForbiddenException('Vui lòng xác minh email và số điện thoại trước khi đăng nhập');
+      if (!session.user.emailVerifiedAt) {
+        throw new ForbiddenException('Vui lòng xác minh email trước khi đăng nhập');
       }
     }
 
@@ -223,62 +209,6 @@ export class AuthService {
     };
   }
 
-  async verifyPhone(email: string, code: string) {
-    const user = await this.prisma.user.findUnique({
-      where: {
-        email: email.trim().toLowerCase(),
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException('Không tìm thấy người dùng');
-    }
-
-    await this.verificationService.verifyPhoneCode(user, code.trim());
-
-    return {
-      success: true,
-      message: 'Xác minh số điện thoại thành công',
-    };
-  }
-
-  async setPhone(payload: SetPhoneDto) {
-    const email = payload.email.trim().toLowerCase();
-    const phone = payload.phone.trim();
-
-    if (!phone) {
-      throw new BadRequestException('Số điện thoại không hợp lệ');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user || !verifyUserPassword(payload.password, user.passwordHash)) {
-      throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
-    }
-
-    const updated = await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        phone,
-        phoneVerifiedAt: null,
-        phoneVerificationCodeHash: null,
-        phoneVerificationExpiresAt: null,
-      },
-    });
-
-    const phoneSent = await this.verificationService.issuePhoneVerification(updated);
-    if (!phoneSent) {
-      throw new BadRequestException('Không thể gửi mã OTP, vui lòng thử lại');
-    }
-
-    return {
-      success: true,
-      message: 'Đã cập nhật số điện thoại và gửi mã OTP',
-    };
-  }
-
   async resendEmailVerification(email: string) {
     const user = await this.prisma.user.findUnique({
       where: {
@@ -306,40 +236,6 @@ export class AuthService {
     return {
       success: true,
       message: 'Đã gửi lại mã xác minh email',
-    };
-  }
-
-  async resendPhoneVerification(email: string) {
-    const user = await this.prisma.user.findUnique({
-      where: {
-        email: email.trim().toLowerCase(),
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException('Không tìm thấy người dùng');
-    }
-
-    if (!user.phone) {
-      throw new BadRequestException('Vui lòng cập nhật số điện thoại trước khi xác minh');
-    }
-
-    if (user.phoneVerifiedAt) {
-      return {
-        success: true,
-        message: 'Số điện thoại đã được xác minh',
-      };
-    }
-
-    const phoneSent = await this.verificationService.issuePhoneVerification(user);
-
-    if (!phoneSent) {
-      throw new BadRequestException('Không thể gửi lại mã, vui lòng thử lại');
-    }
-
-    return {
-      success: true,
-      message: 'Đã gửi lại mã OTP',
     };
   }
 

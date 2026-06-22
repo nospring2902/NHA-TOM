@@ -36,9 +36,6 @@ export class UsersService {
     const nextData: {
       fullName?: string;
       phone?: string | null;
-      phoneVerifiedAt?: Date | null;
-      phoneVerificationCodeHash?: string | null;
-      phoneVerificationExpiresAt?: Date | null;
     } = {};
 
     if (payload.fullName) {
@@ -47,9 +44,6 @@ export class UsersService {
 
     if (payload.phone) {
       nextData.phone = payload.phone.trim();
-      nextData.phoneVerifiedAt = null;
-      nextData.phoneVerificationCodeHash = null;
-      nextData.phoneVerificationExpiresAt = null;
     }
 
     const updated = await this.prisma.user.update({

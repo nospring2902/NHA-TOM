@@ -3,10 +3,9 @@ import { Check, UserPlus, Mail, Phone } from "lucide-react";
 const steps = [
   { label: "Đăng ký", icon: UserPlus },
   { label: "Xác minh Gmail", icon: Mail },
-  { label: "Xác minh SĐT", icon: Phone },
 ];
 
-const VerificationStepper = ({ currentStep }: { currentStep: 1 | 2 | 3 }) => {
+const VerificationStepper = ({ currentStep }: { currentStep: 1 | 2 }) => {
   const progressPercent = ((currentStep - 1) / (steps.length - 1)) * 100;
 
   return (
