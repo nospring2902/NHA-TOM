@@ -49,7 +49,7 @@ const RegisterPage = () => {
 
       toast({
         title: "Đăng ký thành công",
-        description: "Vui lòng xác minh email và số điện thoại.",
+        description: "Vui lòng xác minh email.",
       });
 
       navigate("/verify-email");
