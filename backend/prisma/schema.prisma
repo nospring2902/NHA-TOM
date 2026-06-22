@@ -80,6 +80,13 @@ model User {
   email                String            @unique
   fullName             String
   passwordHash         String
+  phone                String?
+  emailVerifiedAt      DateTime?
+  phoneVerifiedAt      DateTime?
+  emailVerificationCodeHash String?
+  emailVerificationExpiresAt DateTime?
+  phoneVerificationCodeHash String?
+  phoneVerificationExpiresAt DateTime?
   role                 UserRole          @default(FARM_STAFF)
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt

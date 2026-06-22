@@ -30,6 +30,19 @@ THINGSBOARD_USERNAME=tenant@thingsboard.org
 THINGSBOARD_PASSWORD=tenant
 DEVICE_TOKEN_ENCRYPTION_KEY=replace_with_long_random_secret
 ADMIN_BOOTSTRAP_KEY=replace_with_admin_bootstrap_key
+ADMIN_BOOTSTRAP_PHONE=0901234567
+VERIFICATION_CODE_SECRET=replace_with_long_random_secret
+VERIFICATION_CODE_TTL_MINUTES=10
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_smtp_user
+SMTP_PASS=your_smtp_pass
+EMAIL_FROM="NHATOM <no-reply@nhatom.local>"
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=replace_with_twilio_auth_token
+TWILIO_FROM=+15005550006
+TWILIO_MESSAGING_SERVICE_SID=MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 Khuyen nghi:

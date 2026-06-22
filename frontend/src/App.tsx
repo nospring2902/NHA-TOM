@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+import VerifyPhonePage from "./pages/VerifyPhonePage";
 import AdminDevicePage from "./pages/AdminDevicePage";
 import HomePage from "./pages/HomePage";
 import ProfilePage from "./pages/ProfilePage";
@@ -26,6 +28,8 @@ const App = () => (
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route path="/verify-phone" element={<VerifyPhonePage />} />
               <Route path="/admin/devices" element={<AdminDevicePage />} />
               <Route path="/home" element={<HomePage />} />
               <Route path="/profile" element={<ProfilePage />} />

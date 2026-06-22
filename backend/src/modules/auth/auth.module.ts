@@ -6,20 +6,23 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { TokenService } from './token.service';
+import { VerificationService } from './verification.service';
 
 @Global()
 @Module({
+  imports: [],
   controllers: [AuthController],
   providers: [
     AuthService,
     TokenService,
     AuthContextService,
     AdminSeedService,
+    VerificationService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
   ],
-  exports: [AuthService, AuthContextService, TokenService],
+  exports: [AuthService, AuthContextService, TokenService, VerificationService],
 })
 export class AuthModule {}
