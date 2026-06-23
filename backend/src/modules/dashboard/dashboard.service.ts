@@ -1,17 +1,19 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { AiForecastService } from './ai-forecast.service';
+import { PondAccessService } from '../collaboration/pond-access.service';
 
 @Injectable()
 export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiForecastService: AiForecastService,
+    private readonly pondAccessService: PondAccessService,
   ) {}
 
   async realtime(pondId: string, userId: string) {
-    await this.assertPondOwnership(pondId, userId);
+    await this.pondAccessService.assertReadAccess(pondId, userId);
 
     const [latest, snapshots, activeBindings] = await Promise.all([
       this.prisma.pondMetricLatest.findUnique({
@@ -119,7 +121,7 @@ export class DashboardService {
   }
 
   async score(pondId: string, userId: string) {
-    await this.assertPondOwnership(pondId, userId);
+    await this.pondAccessService.assertReadAccess(pondId, userId);
 
     const latest = await this.prisma.pondMetricLatest.findUnique({
       where: {
@@ -168,7 +170,7 @@ export class DashboardService {
   }
 
   async forecast(pondId: string, userId: string) {
-    await this.assertPondOwnership(pondId, userId);
+    await this.pondAccessService.assertReadAccess(pondId, userId);
 
     const lookbackDays = this.getAiLookbackDays();
     const fromDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
@@ -326,22 +328,4 @@ export class DashboardService {
     return Date.now() - lastTelemetryAt.getTime() <= 2 * 60 * 1000;
   }
 
-  private async assertPondOwnership(pondId: string, userId: string) {
-    const pond = await this.prisma.pond.findUnique({
-      where: {
-        id: pondId,
-      },
-      select: {
-        ownerId: true,
-      },
-    });
-
-    if (!pond) {
-      throw new NotFoundException('Không tìm thấy ao tôm');
-    }
-
-    if (pond.ownerId !== userId) {
-      throw new ForbiddenException('Bạn không có quyền truy cập ao tôm này');
-    }
-  }
 }

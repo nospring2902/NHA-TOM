@@ -12,13 +12,14 @@ const BASE_LONGITUDE = Number(process.env.SIMULATOR_BASE_LONGITUDE || 105.1524);
 const OUTLIER_PROB = Number(process.env.SIMULATOR_OUTLIER_PROB || 0.05);
 
 // Fallback token list. You can edit directly for quick local tests.
-const STATIC_ACCESS_TOKENS = ["LaQSXKgexmSdkS5fCkWj", "SHoW3rBot288omdKhea3", "gKwHz7p2OOw239zWSXVu"];
+const STATIC_ACCESS_TOKENS = ["LaQSXKgexmSdkS5fCkWj", "SHoW3rBot288omdKhea3", "gKwHz7p2OOw239zWSXVu", "5VeI5emx9V6XPAEsI2DB"];
 
 const STATIC_DEVICE_LOCATIONS = {
   LaQSXKgexmSdkS5fCkWj: { latitude: 9.183102, longitude: 105.161804 },
   SHoW3rBot288omdKhea3: { latitude: 9.168417, longitude: 105.146201 },
   gKwHz7p2OOw239zWSXVu: { latitude: 9.1765, longitude: 105.1524 },
 };
+
 
 
 function loadTokensFromFile() {

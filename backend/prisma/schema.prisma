@@ -75,6 +75,26 @@ enum FriendRequestStatus {
   REJECTED
 }
 
+enum FarmInviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 model User {
   id                   String            @id @default(uuid())
   email                String            @unique
@@ -103,6 +123,13 @@ model User {
   commandRequests      DeviceCommand[]   @relation("CommandRequestedBy")
   provisionedDevices   Device[]          @relation("DeviceOwner")
   activatedInventories DeviceInventory[] @relation("InventoryActivatedBy")
+  sentFarmInvites      FarmInvite[]      @relation("FarmInviteSender")
+  receivedFarmInvites  FarmInvite[]      @relation("FarmInviteRecipient")
+  ownedFarmMembers     FarmMember[]      @relation("FarmOwnerMembers")
+  memberOfFarms        FarmMember[]      @relation("FarmMemberOf")
+  createdTasks         Task[]            @relation("TaskCreator")
+  assignedTasks        Task[]            @relation("TaskAssignee")
+  notifications        Notification[]
 
   @@map("users")
 }
@@ -149,6 +176,7 @@ model Pond {
   activityLogs        ActivityLog[]
   posts               Post[]
   commandRequests     DeviceCommand[]
+  tasks               Task[]
 
   @@index([ownerId])
   @@index([lifecycleStatus, createdAt])
@@ -415,4 +443,70 @@ model ChatMessage {
   @@index([senderId, createdAt])
   @@index([recipientId, createdAt])
   @@map("chat_messages")
+}
+
+model FarmInvite {
+  id        String           @id @default(uuid())
+  ownerId   String
+  inviteeId String
+  status    FarmInviteStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  owner     User             @relation("FarmInviteSender", fields: [ownerId], references: [id], onDelete: Cascade)
+  invitee   User             @relation("FarmInviteRecipient", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, inviteeId])
+  @@index([inviteeId, status])
+  @@map("farm_invites")
+}
+
+model FarmMember {
+  id        String   @id @default(uuid())
+  ownerId   String
+  memberId  String
+  createdAt DateTime @default(now())
+  owner     User     @relation("FarmOwnerMembers", fields: [ownerId], references: [id], onDelete: Cascade)
+  member    User     @relation("FarmMemberOf", fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, memberId])
+  @@index([memberId])
+  @@map("farm_members")
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  pondId      String
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  creatorId   String
+  assigneeId  String?
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  pond        Pond         @relation(fields: [pondId], references: [id], onDelete: Cascade)
+  creator     User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([pondId, status])
+  @@index([assigneeId, status])
+  @@index([creatorId])
+  @@map("tasks")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  metadata  Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
 }

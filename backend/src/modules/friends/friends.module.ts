@@ -8,5 +8,6 @@ import { RealtimeService } from './realtime.service';
 @Module({
   controllers: [FriendsController],
   providers: [FriendsService, PresenceService, RealtimeService, RealtimeGateway],
+  exports: [RealtimeService, PresenceService],
 })
 export class FriendsModule {}

@@ -161,6 +161,11 @@ export const createPond = async (
   return response.data;
 };
 
+export const getPond = async (pondId: string): Promise<ApiEnvelope<CreatedPond & { ownerId: string }>> => {
+  const response = await http.get<ApiEnvelope<CreatedPond & { ownerId: string }>>(`/ponds/${pondId}`);
+  return response.data;
+};
+
 export const createPondAndBindDevice = async (
   input: CreatePondAndBindInput,
 ): Promise<CreatePondAndBindResult> => {

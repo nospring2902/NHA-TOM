@@ -12,6 +12,7 @@ import {
   PondWaterType as PrismaPondWaterType,
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { PondAccessService } from '../collaboration/pond-access.service';
 import { BindDeviceDto } from './dto/bind-device.dto';
 import {
   CreatePondDto,
@@ -41,32 +42,60 @@ const DEVICE_TYPE_FROM_PRISMA: Record<DeviceType, string> = {
 
 @Injectable()
 export class PondsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pondAccessService: PondAccessService,
+  ) {}
 
   async list(userId: string) {
-    const ponds = await this.prisma.pond.findMany({
-      where: {
-        ownerId: userId,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+    // Get owned ponds
+    const ownedPonds = await this.prisma.pond.findMany({
+      where: { ownerId: userId },
+      orderBy: { createdAt: 'desc' },
     });
+
+    // Get collaborative ponds (where user is farm member)
+    const farmMemberships = await this.prisma.farmMember.findMany({
+      where: { memberId: userId },
+      select: { ownerId: true },
+    });
+
+    const ownerIds = farmMemberships.map((m) => m.ownerId);
+    const collaborativePonds =
+      ownerIds.length > 0
+        ? await this.prisma.pond.findMany({
+            where: { ownerId: { in: ownerIds } },
+            include: { owner: { select: { id: true, fullName: true } } },
+            orderBy: { createdAt: 'desc' },
+          })
+        : [];
 
     return {
       success: true,
       message: 'List ponds',
-      data: ponds.map((pond) => this.serializePond(pond)),
+      data: [
+        ...ownedPonds.map((pond) => ({ ...this.serializePond(pond), isCollaborative: false })),
+        ...collaborativePonds.map((pond) => ({
+          ...this.serializePond(pond),
+          isCollaborative: true,
+          ownerName: pond.owner.fullName,
+        })),
+      ],
       meta: {
         page: 1,
         limit: 20,
-        total: ponds.length,
+        total: ownedPonds.length + collaborativePonds.length,
       },
     };
   }
 
   async getById(id: string, userId: string) {
-    const pond = await this.findOwnedPondOrThrow(id, userId);
+    await this.pondAccessService.assertReadAccess(id, userId);
+
+    const pond = await this.prisma.pond.findUnique({ where: { id } });
+    if (!pond) {
+      throw new NotFoundException('Không tìm thấy ao tôm');
+    }
 
     return {
       success: true,
