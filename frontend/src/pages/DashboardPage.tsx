@@ -7,7 +7,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { AddDeviceModal } from "@/components/AddDeviceModal";
 import { BoundDevice, getApiErrorMessage } from "@/lib/device-binding";
 import { DashboardForecast, DashboardRealtime, getDashboardForecast, getDashboardRealtime } from "@/lib/dashboard";
-
+import { MembersPanel } from "@/components/MembersPanel";
+import { TaskBoard } from "@/components/TaskBoard";
+import { getPond } from "@/lib/device-binding";
+import { getAuthSession } from "@/lib/auth";
 const STATUS_LABEL: Record<BoundDevice["status"], string> = {
   INACTIVE: "Chưa kích hoạt",
   WAITING_SIGNAL: "Đang chờ tín hiệu",
@@ -86,6 +89,7 @@ const activityLog = [
 const DashboardPage = () => {
   const { id } = useParams();
   const pondId = id ?? "1";
+  const session = getAuthSession();
   const [aerator, setAerator] = useState(true);
   const [pump, setPump] = useState(false);
   const [light, setLight] = useState(true);
@@ -97,6 +101,7 @@ const DashboardPage = () => {
   const [forecast, setForecast] = useState<DashboardForecast | null>(null);
   const [forecastError, setForecastError] = useState<string | null>(null);
   const [isForecastLoading, setIsForecastLoading] = useState(true);
+  const [pondOwnerId, setPondOwnerId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -149,6 +154,27 @@ const DashboardPage = () => {
     return () => {
       mounted = false;
       window.clearInterval(timer);
+    };
+  }, [pondId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadPondDetail = async () => {
+      try {
+        const response = await getPond(pondId);
+        if (mounted) {
+          setPondOwnerId(response.data.ownerId);
+        }
+      } catch {
+        // silent fail
+      }
+    };
+
+    void loadPondDetail();
+
+    return () => {
+      mounted = false;
     };
   }, [pondId]);
 
@@ -313,6 +339,7 @@ const DashboardPage = () => {
   };
 
   const active = chartConfig[activeChart];
+  const isOwner = session?.user.id === pondOwnerId;
 
   return (
     <div className="min-h-screen bg-background">

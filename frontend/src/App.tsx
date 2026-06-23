@@ -9,11 +9,13 @@ import AdminDevicePage from "./pages/AdminDevicePage";
 import HomePage from "./pages/HomePage";
 import ProfilePage from "./pages/ProfilePage";
 import DashboardPage from "./pages/DashboardPage";
+import TasksPage from "./pages/TasksPage";
 import NotFound from "./pages/NotFound";
 import UserProfilePage from "./pages/UserProfilePage";
 import { RealtimeProvider } from "@/contexts/RealtimeContext";
 import { FriendsProvider } from "@/contexts/FriendsContext";
 import { ChatProvider } from "@/contexts/ChatContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 
 const App = () => (
   <>
@@ -22,21 +24,24 @@ const App = () => (
     <RealtimeProvider>
       <FriendsProvider>
         <ChatProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/verify-email" element={<VerifyEmailPage />} />
-              <Route path="/admin/devices" element={<AdminDevicePage />} />
-              <Route path="/home" element={<HomePage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/users/:id" element={<UserProfilePage />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/dashboard/:id" element={<DashboardPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+          <NotificationProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/admin/devices" element={<AdminDevicePage />} />
+                <Route path="/home" element={<HomePage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/users/:id" element={<UserProfilePage />} />
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/dashboard/:id" element={<DashboardPage />} />
+                <Route path="/tasks" element={<TasksPage />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </NotificationProvider>
         </ChatProvider>
       </FriendsProvider>
     </RealtimeProvider>
@@ -44,3 +49,4 @@ const App = () => (
 );
 
 export default App;
+

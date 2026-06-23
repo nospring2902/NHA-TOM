@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Grid3x3, Waves, Settings, MapPin, Loader2, List, Map as MapIcon } from "lucide-react";
+import { Grid3x3, Waves, Settings, MapPin, Loader2, List, Map as MapIcon, Users, Check, X, Building2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AddPondModal } from "@/components/AddPondModal";
@@ -17,6 +17,23 @@ import { getAuthSession } from "@/lib/auth";
 import { http } from "@/lib/http";
 import { getDashboardRealtime, type RealtimeDevice } from "@/lib/dashboard";
 import AppLayout from "@/components/AppLayout";
+import { useRealtime } from "@/contexts/RealtimeContext";
+import {
+  listMyInvites,
+  acceptInvite,
+  rejectInvite,
+  type FarmInvite,
+} from "@/lib/collaboration";
+import { toast } from "@/hooks/use-toast";
+import { MembersPanel } from "@/components/MembersPanel";
+import { TaskBoard } from "@/components/TaskBoard";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -58,6 +75,8 @@ type PondRow = {
     lat: number;
     lng: number;
   } | null;
+  isCollaborative?: boolean;
+  ownerName?: string;
 };
 
 type PondSetupStatus = "READY" | RealtimeSignalStatus;
@@ -73,6 +92,8 @@ type ProfilePond = {
   score: number | null;
   status: PondSetupStatus;
   boundDevice?: BoundDevice;
+  isCollaborative?: boolean;
+  ownerName?: string;
 };
 
 type PondCoordinateSource = {
@@ -213,7 +234,7 @@ const ProfilePage = () => {
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const currentUserId = profileUser?.id ?? session?.user.id ?? null;
 
-  const [activeTab, setActiveTab] = useState<"posts" | "ponds">("posts");
+  const [activeTab, setActiveTab] = useState<"posts" | "ponds" | "farm">("ponds");
   const [pondViewMode, setPondViewMode] = useState<PondViewMode>("list");
   const [ponds, setPonds] = useState<ProfilePond[]>([]);
   const [posts, setPosts] = useState<ProfilePost[]>([]);
@@ -223,6 +244,38 @@ const ProfilePage = () => {
   const [postLoadError, setPostLoadError] = useState<string | null>(null);
   const [pondTotal, setPondTotal] = useState<number | null>(null);
   const [postTotal, setPostTotal] = useState<number | null>(null);
+  const [selectedPondIdForTasks, setSelectedPondIdForTasks] = useState<string>("");
+
+  const { socket } = useRealtime();
+  const [invites, setInvites] = useState<FarmInvite[]>([]);
+  const [isInvitesLoading, setIsInvitesLoading] = useState(true);
+
+  const fetchInvites = useCallback(async () => {
+    setIsInvitesLoading(true);
+    try {
+      const response = await listMyInvites();
+      setInvites(response.data);
+    } catch {
+      // silent
+    } finally {
+      setIsInvitesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchInvites();
+  }, [fetchInvites]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNewInvite = () => {
+      void fetchInvites();
+    };
+    socket.on("farm:invite", handleNewInvite);
+    return () => {
+      socket.off("farm:invite", handleNewInvite);
+    };
+  }, [socket, fetchInvites]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -321,6 +374,8 @@ const ProfilePage = () => {
               longitude: coordinates?.longitude ?? null,
               score,
               status: "READY" as PondSetupStatus,
+              isCollaborative: pond.isCollaborative,
+              ownerName: pond.ownerName,
             };
           }
 
@@ -335,11 +390,17 @@ const ProfilePage = () => {
             score,
             status: mapDeviceStatusToPondStatus(primaryDevice.status),
             boundDevice,
+            isCollaborative: pond.isCollaborative,
+            ownerName: pond.ownerName,
           };
         });
 
         setPonds(mapped);
         setPondTotal(totalPonds);
+        const ownedPonds = mapped.filter((p) => !p.isCollaborative);
+        if (ownedPonds.length > 0 && !selectedPondIdForTasks) {
+          setSelectedPondIdForTasks(ownedPonds[0].id);
+        }
       } catch (error) {
         if (!isMounted) {
           return;
@@ -780,10 +841,18 @@ const ProfilePage = () => {
           >
             <Waves className="w-4 h-4" /> Nhà tôm
           </button>
+          <button
+            onClick={() => setActiveTab("farm")}
+            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "farm" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Users className="w-4 h-4" /> Nhóm & Nhiệm vụ
+          </button>
         </div>
 
         {/* Content */}
-        {activeTab === "posts" ? (
+        {activeTab === "posts" && (
           <div className="grid grid-cols-3 gap-2">
             {isLoadingPosts && (
               <div className="col-span-3 flex items-center justify-center gap-2 py-8 text-muted-foreground">
@@ -814,8 +883,63 @@ const ProfilePage = () => {
                 </div>
               ))}
           </div>
-        ) : (
+        )}
+
+        {activeTab === "ponds" && (
           <div className="space-y-3">
+            {/* Lời mời cộng tác */}
+            {!isInvitesLoading && invites.length > 0 && (
+              <div className="bg-card rounded-xl border border-border shadow-card p-4 mb-6">
+                <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" /> Lời mời cộng tác ({invites.length})
+                </h3>
+                <div className="space-y-2">
+                  {invites.map((invite) => (
+                    <div key={invite.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/50">
+                      <div>
+                        <p className="text-sm font-medium">{invite.owner.fullName}</p>
+                        <p className="text-xs text-muted-foreground">Mời bạn cùng quản lý Farm</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="h-8 gap-1"
+                          onClick={async () => {
+                            try {
+                              await acceptInvite(invite.id);
+                              setInvites((prev) => prev.filter((i) => i.id !== invite.id));
+                              toast({ title: "Đã chấp nhận lời mời" });
+                              window.location.reload();
+                            } catch (e) {
+                              toast({ title: "Lỗi", description: "Không thể nhận lời mời", variant: "destructive" });
+                            }
+                          }}
+                        >
+                          <Check className="h-3.5 w-3.5" /> Đồng ý
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1"
+                          onClick={async () => {
+                            try {
+                              await rejectInvite(invite.id);
+                              setInvites((prev) => prev.filter((i) => i.id !== invite.id));
+                              toast({ title: "Đã từ chối lời mời" });
+                            } catch (e) {
+                              toast({ title: "Lỗi", description: "Không thể từ chối lời mời", variant: "destructive" });
+                            }
+                          }}
+                        >
+                          <X className="h-3.5 w-3.5" /> Từ chối
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end">
               <div className="inline-flex items-center rounded-lg border border-border bg-card p-1 shadow-card">
                 <button
@@ -893,8 +1017,18 @@ const ProfilePage = () => {
                         <Waves className="w-5 h-5 text-primary-foreground" />
                       </div>
                       <div>
-                        <p className="font-semibold text-foreground">{pond.name}</p>
-                        <p className="text-xs text-muted-foreground">{pond.area} · {pond.location}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-foreground">{pond.name}</p>
+                          {pond.isCollaborative && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                              Cộng tác
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {pond.area} · {pond.location}
+                          {pond.isCollaborative && pond.ownerName && ` · Owner: ${pond.ownerName}`}
+                        </p>
                       </div>
                     </div>
                     <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${statusConfig.className}`}>
@@ -939,6 +1073,44 @@ const ProfilePage = () => {
             })}
 
             <AddPondModal onCreated={handlePondCreated} />
+          </div>
+        )}
+
+        {activeTab === "farm" && (
+          <div className="space-y-6">
+            <MembersPanel isOwner={true} />
+
+            <div className="bg-card rounded-xl border border-border shadow-card p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-primary" /> Nhiệm vụ theo ao
+                </h3>
+                <div className="flex items-center gap-2">
+                  <Select value={selectedPondIdForTasks} onValueChange={setSelectedPondIdForTasks}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Chọn ao..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ponds.filter(p => !p.isCollaborative).map(pond => (
+                        <SelectItem key={pond.id} value={pond.id}>
+                          {pond.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              {selectedPondIdForTasks ? (
+                <div className="mt-4 border-t border-border pt-4">
+                  <TaskBoard pondId={selectedPondIdForTasks} isOwner={true} />
+                </div>
+              ) : (
+                <div className="text-center py-6 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-border">
+                  Vui lòng tạo ít nhất một nhà tôm để quản lý nhiệm vụ.
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
