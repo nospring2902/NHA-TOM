@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,6 +11,7 @@ import type { ChatMessage } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { PresenceService } from './presence.service';
 import { RealtimeService } from './realtime.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class FriendsService {
@@ -16,6 +19,8 @@ export class FriendsService {
     private readonly prisma: PrismaService,
     private readonly presenceService: PresenceService,
     private readonly realtimeService: RealtimeService,
+    @Inject(forwardRef(() => NotificationsService))
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async list(userId: string) {
@@ -207,6 +212,14 @@ export class FriendsService {
       createdAt: request.createdAt,
     });
 
+    await this.notificationsService.create(
+      friendId,
+      'friend_request',
+      'Lời mời kết bạn',
+      `${request.requester.fullName} đã gửi lời mời kết bạn`,
+      { requestId: request.id },
+    );
+
     return {
       success: true,
       message: 'Đã gửi lời mời kết bạn',
@@ -267,6 +280,14 @@ export class FriendsService {
       recipientUser ?? ({ id: request.recipientId, fullName: 'Bạn bè', email: '' } as const);
 
     if (!silent) {
+      await this.notificationsService.create(
+        request.requesterId,
+        'friend_accepted',
+        'Lời mời kết bạn được chấp nhận',
+        `${friendForRequester.fullName} đã chấp nhận lời mời kết bạn của bạn`,
+        { friendId: userId, requestId: request.id },
+      );
+
       this.realtimeService.emitToUser(request.requesterId, 'friend:accepted', {
         user: {
           id: userId,
@@ -365,7 +386,24 @@ export class FriendsService {
         recipientId: friendId,
         content: normalized,
       },
+      include: {
+        sender: {
+          select: { fullName: true }
+        }
+      }
     });
+
+    // Extract sender name and snippet
+    const senderName = message.sender?.fullName || 'Ai đó';
+    const snippet = normalized.length > 40 ? normalized.substring(0, 40) + '...' : normalized;
+
+    await this.notificationsService.create(
+      friendId,
+      'chat_message',
+      'Tin nhắn mới',
+      `${senderName}: ${snippet}`,
+      { senderId: userId, messageId: message.id },
+    );
 
     return this.serializeMessage(message);
   }

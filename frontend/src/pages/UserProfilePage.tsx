@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Grid3x3, Loader2, MessageCircle, MapPin } from "lucide-react";
+import { Grid3x3, Loader2, MessageCircle, MapPin, UserCheck, Clock, UserPlus } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { http } from "@/lib/http";
 import { getApiErrorMessage } from "@/lib/device-binding";
 import { useChat } from "@/contexts/ChatContext";
+import { useFriends } from "@/contexts/FriendsContext";
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -60,11 +61,58 @@ const getInitials = (name: string): string => {
 const UserProfilePage = () => {
   const { id } = useParams();
   const { openChat } = useChat();
+  const { sendRequest } = useFriends();
+  const [friendStatus, setFriendStatus] = useState<'NONE' | 'FRIEND' | 'PENDING'>('NONE');
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Array<{ id: string; preview: string }>>([]);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Load friend status after profile loads
+  useEffect(() => {
+    if (!profile) return;
+    const loadStatus = async () => {
+      setStatusLoading(true);
+      try {
+        // Check if already friends
+        const friendsRes = await http.get<any>(`/friends/${profile.id}`);
+        // Assuming endpoint returns list? We'll instead fetch list and check
+        const listRes = await http.get<any>('/friends');
+        const isFriend = listRes.data.data.some((f: any) => f.id === profile.id);
+        if (isFriend) {
+          setFriendStatus('FRIEND');
+        } else {
+          // Check pending incoming requests
+          const incomingRes = await http.get<any>('/friends/requests');
+          const pending = incomingRes.data.data.some((r: any) => r.requester.id === profile.id);
+          setFriendStatus(pending ? 'PENDING' : 'NONE');
+        }
+      } catch (e) {
+        // ignore errors
+      } finally {
+        setStatusLoading(false);
+      }
+    };
+    void loadStatus();
+  }, [profile]);
+
+  const handleSendRequest = async () => {
+    if (!profile) return;
+    setSendingId(profile.id);
+    try {
+      await sendRequest(profile.id);
+      setFriendStatus('PENDING');
+    } catch (e) {
+      // handle error if needed
+    } finally {
+      setSendingId(null);
+    }
+  };
+
+  // UI modifications: replace the existing Button with conditional rendering
 
   useEffect(() => {
     if (!id) {
@@ -174,9 +222,7 @@ const UserProfilePage = () => {
               variant="outline"
               className="gap-2"
               onClick={() => {
-                if (!profile) {
-                  return;
-                }
+                if (!profile) return;
                 openChat({
                   id: profile.id,
                   fullName: profile.fullName,
@@ -187,6 +233,30 @@ const UserProfilePage = () => {
             >
               <MessageCircle className="w-4 h-4" /> Nhắn tin
             </Button>
+            {/* Friend request UI */}
+            {friendStatus === 'FRIEND' && (
+              <span className="flex items-center gap-1 text-xs text-green-600 font-medium px-2 bg-green-500/10 rounded-full py-1">
+                <UserCheck className="h-3 w-3" /> Bạn bè
+              </span>
+            )}
+            {friendStatus === 'PENDING' && (
+              <span className="flex items-center gap-1 text-xs text-orange-500 font-medium px-2 bg-orange-500/10 rounded-full py-1">
+                <Clock className="h-3 w-3" /> Đang chờ
+              </span>
+            )}
+            {friendStatus === 'NONE' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-7 px-3 text-xs"
+                disabled={sendingId === profile?.id}
+                onClick={handleSendRequest}
+              >
+                {sendingId === profile?.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <UserPlus className="h-3 w-3 mr-1" />}
+                Kết bạn
+              </Button>
+            )}
+
           </div>
         </div>
 

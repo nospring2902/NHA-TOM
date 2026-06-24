@@ -10,6 +10,7 @@ import HomePage from "./pages/HomePage";
 import ProfilePage from "./pages/ProfilePage";
 import DashboardPage from "./pages/DashboardPage";
 import TasksPage from "./pages/TasksPage";
+import NotificationsPage from "./pages/NotificationsPage";
 import NotFound from "./pages/NotFound";
 import UserProfilePage from "./pages/UserProfilePage";
 import { RealtimeProvider } from "@/contexts/RealtimeContext";
@@ -38,6 +39,7 @@ const App = () => (
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/dashboard/:id" element={<DashboardPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

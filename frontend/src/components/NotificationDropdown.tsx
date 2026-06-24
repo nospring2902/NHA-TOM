@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { Link } from "react-router-dom";
 
 const TYPE_ICON: Record<string, typeof Bell> = {
   farm_invite: Users,
@@ -124,6 +125,11 @@ export const NotificationDropdown = () => {
             </div>
           )}
         </ScrollArea>
+        <div className="p-2 border-t">
+          <Button variant="ghost" className="w-full text-sm h-8" asChild onClick={() => setOpen(false)}>
+            <Link to="/notifications">Xem tất cả</Link>
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

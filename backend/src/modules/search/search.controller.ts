@@ -16,9 +16,9 @@ export class SearchController {
     @Query('limit') limit = '5',
     @Req() req: Request,
   ) {
-    this.authContextService.requireCurrentUserId(req);
+    const userId = this.authContextService.requireCurrentUserId(req);
 
-    const data = await this.searchService.search(q, Number(limit));
+    const data = await this.searchService.search(userId, q, Number(limit));
 
     return {
       success: true,

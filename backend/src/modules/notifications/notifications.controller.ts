@@ -14,10 +14,12 @@ export class NotificationsController {
   list(
     @Query('limit') limit = '20',
     @Query('cursor') cursor: string | undefined,
+    @Query('types') types: string | undefined,
     @Req() req: Request,
   ) {
     const userId = this.authContextService.requireCurrentUserId(req);
-    return this.notificationsService.list(userId, Number(limit), cursor);
+    const typeArray = types ? types.split(',').map(t => t.trim()).filter(Boolean) : undefined;
+    return this.notificationsService.list(userId, Number(limit), cursor, typeArray);
   }
 
   @Get('unread-count')

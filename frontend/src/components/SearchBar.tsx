@@ -4,6 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { searchGlobal, type SearchResult } from "@/lib/search";
 import { getApiErrorMessage } from "@/lib/device-binding";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { UserPlus, UserCheck, Clock, Loader2 } from "lucide-react";
+import { useFriends } from "@/contexts/FriendsContext";
 
 const getInitials = (name: string): string => {
   const parts = name
@@ -32,12 +35,14 @@ const truncate = (value: string, maxLength: number) => {
 
 const SearchBar = () => {
   const navigate = useNavigate();
+  const { sendRequest } = useFriends();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult>({ users: [], posts: [] });
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
   const hasResults = useMemo(
     () => results.users.length > 0 || results.posts.length > 0,
@@ -136,24 +141,66 @@ const SearchBar = () => {
               ) : (
                 <div className="space-y-1 px-2 pb-3">
                   {results.users.map((user) => (
-                    <button
+                    <div
                       key={user.id}
-                      onClick={() => {
-                        navigate(`/users/${user.id}`);
-                        setIsOpen(false);
-                      }}
-                      className="w-full flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-muted text-left"
+                      className="w-full flex items-center justify-between rounded-lg px-3 py-2 hover:bg-muted"
                     >
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-                          {getInitials(user.fullName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{user.fullName}</p>
-                        <p className="text-[11px] text-muted-foreground">{user.email}</p>
+                      <button
+                        onClick={() => {
+                          navigate(`/users/${user.id}`);
+                          setIsOpen(false);
+                        }}
+                        className="flex-1 flex items-center gap-3 text-left min-w-0"
+                      >
+                        <Avatar className="h-8 w-8 shrink-0">
+                          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                            {getInitials(user.fullName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 truncate">
+                          <p className="text-sm font-medium text-foreground truncate">{user.fullName}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
+                        </div>
+                      </button>
+
+                      <div className="shrink-0 ml-2 flex items-center">
+                        {user.friendStatus === 'FRIEND' && (
+                          <div className="flex items-center gap-1 text-xs text-green-600 font-medium px-2 bg-green-500/10 rounded-full py-1">
+                            <UserCheck className="h-3 w-3" />
+                            Bạn bè
+                          </div>
+                        )}
+                        {user.friendStatus === 'PENDING' && (
+                          <div className="flex items-center gap-1 text-xs text-orange-500 font-medium px-2 bg-orange-500/10 rounded-full py-1">
+                            <Clock className="h-3 w-3" />
+                            Đang chờ
+                          </div>
+                        )}
+                        {(user.friendStatus === 'NONE' || !user.friendStatus) && (
+                          <Button 
+                            size="sm" 
+                            variant="secondary" 
+                            className="h-7 px-3 text-xs"
+                            disabled={sendingId === user.id}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setSendingId(user.id);
+                              try {
+                                await sendRequest(user.id);
+                                setResults(prev => ({
+                                  ...prev,
+                                  users: prev.users.map(u => u.id === user.id ? { ...u, friendStatus: 'PENDING' } : u)
+                                }));
+                              } catch {}
+                              finally { setSendingId(null); }
+                            }}
+                          >
+                            {sendingId === user.id ? <Loader2 className="h-3 w-3 animate-spin mr-1"/> : <UserPlus className="h-3 w-3 mr-1" />}
+                            Kết bạn
+                          </Button>
+                        )}
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
