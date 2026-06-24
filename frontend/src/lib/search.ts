@@ -11,6 +11,7 @@ export type SearchUser = {
   id: string;
   fullName: string;
   email: string;
+  friendStatus?: 'NONE' | 'FRIEND' | 'PENDING';
 };
 
 export type SearchPost = {

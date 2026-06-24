@@ -20,9 +20,14 @@ export type NotificationItem = {
 export const listNotifications = async (
   limit = 20,
   cursor?: string,
+  types?: string[],
 ): Promise<ApiEnvelope<NotificationItem[]>> => {
+  const params: any = { limit, cursor };
+  if (types && types.length > 0) {
+    params.types = types.join(',');
+  }
   const response = await http.get<ApiEnvelope<NotificationItem[]>>("/notifications", {
-    params: { limit, cursor },
+    params,
   });
   return response.data;
 };

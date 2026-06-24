@@ -1,20 +1,21 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, User, MessageCircle, Droplets, Cpu, ClipboardList } from "lucide-react";
+import { Home, User, MessageCircle, Droplets, Cpu, ClipboardList, Bell } from "lucide-react";
 import { getAuthSession } from "@/lib/auth";
 import SearchBar from "@/components/SearchBar";
 import ChatDock from "@/components/ChatDock";
-import { NotificationDropdown } from "@/components/NotificationDropdown";
+import { useNotifications } from "@/contexts/NotificationContext";
 
 const baseNavItems = [
   { to: "/home", icon: Home, label: "Trang chủ" },
   { to: "/tasks", icon: ClipboardList, label: "Nhiệm vụ" },
-  { to: "/chat", icon: MessageCircle, label: "Tin nhắn" },
+  { to: "/notifications", icon: Bell, label: "Thông báo" },
   { to: "/profile", icon: User, label: "Cá nhân" },
 ];
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { pathname } = useLocation();
   const session = getAuthSession();
+  const { unreadCount } = useNotifications();
   const navItems =
     session?.user.role === "ADMIN"
       ? [...baseNavItems, { to: "/admin/devices", icon: Cpu, label: "Admin Devices" }]
@@ -43,13 +44,17 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
               >
-                <item.icon className="w-4 h-4" />
+                <div className="relative flex items-center justify-center">
+                  <item.icon className="w-4 h-4" />
+                  {item.to === "/notifications" && unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </div>
                 {item.label}
               </Link>
             ))}
-          </div>
-          <div className="hidden md:flex items-center">
-            <NotificationDropdown />
           </div>
         </div>
       </header>
@@ -70,7 +75,14 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                 pathname === item.to ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <item.icon className="w-5 h-5" />
+              <div className="relative flex items-center justify-center">
+                <item.icon className="w-5 h-5" />
+                {item.to === "/notifications" && unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </div>
               {item.label}
             </Link>
           ))}

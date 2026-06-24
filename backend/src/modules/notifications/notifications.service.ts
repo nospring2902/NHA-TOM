@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { RealtimeService } from '../friends/realtime.service';
 
@@ -6,6 +6,7 @@ import { RealtimeService } from '../friends/realtime.service';
 export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => RealtimeService))
     private readonly realtimeService: RealtimeService,
   ) {}
 
@@ -37,11 +38,16 @@ export class NotificationsService {
   /**
    * List notifications for a user (newest first, paginated).
    */
-  async list(userId: string, limit = 20, cursor?: string) {
+  async list(userId: string, limit = 20, cursor?: string, types?: string[]) {
     const safeLimit = Math.min(Math.max(limit, 1), 50);
 
+    const whereClause: any = { userId };
+    if (types && types.length > 0) {
+      whereClause.type = { in: types };
+    }
+
     const notifications = await this.prisma.notification.findMany({
-      where: { userId },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       take: safeLimit,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
