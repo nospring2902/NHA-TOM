@@ -243,15 +243,15 @@ const DashboardPage = () => {
         status: latestMetric?.ph != null ? "Realtime" : "Chưa có dữ liệu",
       },
       {
-        label: "Oxy hòa tan",
-        value: formatMetric(latestMetric?.dissolvedOxygen, " mg/L", 2),
+        label: "Độ đục",
+        value: formatMetric(latestMetric?.dissolvedOxygen, " NTU", 2),
         icon: Wind,
         color: "text-aqua",
         status: latestMetric?.dissolvedOxygen != null ? "Realtime" : "Chưa có dữ liệu",
       },
       {
-        label: "Độ mặn",
-        value: formatMetric(latestMetric?.salinity, "‰", 2),
+        label: "TDS",
+        value: formatMetric(latestMetric?.salinity, " mg/L", 2),
         icon: Gauge,
         color: "text-wave",
         status: latestMetric?.salinity != null ? "Realtime" : "Chưa có dữ liệu",
@@ -305,10 +305,10 @@ const DashboardPage = () => {
   const alerts = useMemo(() => {
     const realtimeAlerts: Array<{ type: "warning" | "info"; message: string; time: string }> = [];
 
-    if (latestMetric?.dissolvedOxygen != null && latestMetric.dissolvedOxygen < 5) {
+    if (latestMetric?.dissolvedOxygen != null && latestMetric.dissolvedOxygen > 500) {
       realtimeAlerts.push({
         type: "warning",
-        message: "Oxy hòa tan thấp, cân nhắc bật sục khí",
+        message: "Độ đục cao, nước ao có thể bị ô nhiễm",
         time: "Theo dữ liệu telemetry mới nhất",
       });
     }
@@ -334,7 +334,7 @@ const DashboardPage = () => {
 
   const chartConfig = {
     pH: { key: "pH", color: "hsl(195, 85%, 35%)", label: "pH" },
-    DO: { key: "DO", color: "hsl(170, 70%, 40%)", label: "Oxy hòa tan (mg/L)" },
+    DO: { key: "DO", color: "hsl(170, 70%, 40%)", label: "Độ đục (NTU)" },
     temp: { key: "temp", color: "hsl(12, 80%, 60%)", label: "Nhiệt độ (°C)" },
   };
 
@@ -439,13 +439,13 @@ const DashboardPage = () => {
                       pH: {forecast.metrics.ph == null ? "--" : forecast.metrics.ph.toFixed(2)}
                     </div>
                     <div>
-                      DO: {forecast.metrics.dissolvedOxygen == null ? "--" : forecast.metrics.dissolvedOxygen.toFixed(2)}
+                      Độ đục: {forecast.metrics.dissolvedOxygen == null ? "--" : forecast.metrics.dissolvedOxygen.toFixed(2)} NTU
                     </div>
                     <div>
                       Nhiệt: {forecast.metrics.temperature == null ? "--" : forecast.metrics.temperature.toFixed(1)}°C
                     </div>
                     <div>
-                      Độ mặn: {forecast.metrics.salinity == null ? "--" : forecast.metrics.salinity.toFixed(1)}‰
+                      TDS: {forecast.metrics.salinity == null ? "--" : forecast.metrics.salinity.toFixed(1)} mg/L
                     </div>
                   </div>
                 </div>

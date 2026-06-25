@@ -23,12 +23,22 @@ export class TelemetryMetricsDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  turbidity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   temperature?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   salinity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  tds?: number;
 }
 
 export class TelemetryGeoDto {
@@ -86,6 +96,11 @@ export class TelemetryIngestDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  pH?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   dissolvedOxygen?: number;
 
   @IsOptional()
@@ -96,12 +111,22 @@ export class TelemetryIngestDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  turbidity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   temperature?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   salinity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  tds?: number;
 
   @IsOptional()
   @Type(() => Number)
