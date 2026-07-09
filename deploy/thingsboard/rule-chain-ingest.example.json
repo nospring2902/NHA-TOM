@@ -1,6 +1,6 @@
 {
   "note": "Mẫu body gửi từ ThingsBoard Rule Chain → REST API Call node",
-  "url": "https://api.nhatom.vn/api/v1/telemetry/ingest",
+  "url": "https://api.nhatom.online/api/v1/telemetry/ingest",
   "method": "POST",
   "headers": {
     "Content-Type": "application/json",

@@ -22,13 +22,18 @@ sudo bash deploy/thingsboard/install-thingsboard.sh
 
 ## Rule Chain → NHATOM
 
-Trong ThingsBoard UI → **Rule Chains** → chain mặc định:
+Trong ThingsBoard UI → **Rule Chains** → **Root Rule Chain**:
 
-- Trigger: `POST_TELEMETRY`
-- Node: **REST API Call**
-- URL: `https://api.nhatom.vn/api/v1/telemetry/ingest`
-- Header: `x-ingest-token: <THINGSBOARD_INGEST_TOKEN>`
-- Body mẫu: xem `rule-chain-ingest.example.json`
+1. Nối nhánh **Post telemetry** → **Save Timeseries** → **Script (TBEL)** → **REST API Call**
+2. **TB 4.x monolith:** node Script phải dùng **TBEL**, không dùng JavaScript — JS sẽ báo `failed to start`
+3. Script TBEL: copy từ `rule-chain-transform.tbel`
+4. REST API Call:
+   - URL: `https://api.nhatom.online/api/v1/telemetry/ingest`
+   - Method: POST, **không tick** "Without request body"
+   - Headers: `Content-Type: application/json`, `x-ingest-token: <THINGSBOARD_INGEST_TOKEN>`
+5. Body mẫu sau transform: xem `rule-chain-ingest.example.json`
+
+**Lưu ý:** Tên device trên ThingsBoard phải trùng serial NHATOM (vd. `AS-2026-0001`).
 
 ## Thiết bị gửi data
 

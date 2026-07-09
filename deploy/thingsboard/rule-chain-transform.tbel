@@ -1,0 +1,25 @@
+// Node: Transformation → Script (TBEL) — tên "NHATOM Transform"
+// TB 4.x monolith: BẮT BUỘC chọn Script language = TBEL (không dùng JavaScript)
+
+var data = {};
+data.serialNumber = metadata.deviceName;
+data.tbDeviceId = metadata.deviceId;
+data.metrics = {};
+
+if (msg.temperature != null) {
+    data.metrics.temperature = msg.temperature;
+}
+if (msg["pH"] != null) {
+    data.metrics.ph = msg["pH"];
+}
+if (msg.tds != null) {
+    data.metrics.salinity = msg.tds;
+}
+if (msg.turbidity != null) {
+    data.metrics.dissolvedOxygen = msg.turbidity;
+}
+if (msg.latitude != null && msg.longitude != null) {
+    data.geo = {"lat": msg.latitude, "lng": msg.longitude};
+}
+
+return {"msg": data, "metadata": metadata, "msgType": msgType};

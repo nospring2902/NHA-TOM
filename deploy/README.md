@@ -185,8 +185,24 @@ Trên trình duyệt: đăng ký → xác minh email → đăng nhập → provi
 ## Cập nhật phiên bản mới
 
 ```bash
-cd /opt/nhatom/NHATOM
+cd /opt/nhatom/NHA-TOM   # hoặc đường dẫn repo trên VPS
 git pull
+```
+
+### Deploy nhanh (khuyến nghị hàng ngày)
+
+| Lệnh | Khi nào dùng |
+|---|---|
+| `bash deploy/scripts/deploy-quick.sh backend` | Sửa API, service, Prisma, WebSocket |
+| `bash deploy/scripts/deploy-quick.sh frontend` | Sửa giao diện React |
+| `bash deploy/scripts/deploy-quick.sh nginx` | Sửa file `deploy/nginx/*.conf` |
+| `bash deploy/scripts/deploy-quick.sh all` | Deploy đầy đủ (lần đầu / đổi nhiều phần) |
+
+Alias ngắn: `be`/`api` = backend, `fe`/`web` = frontend.
+
+### Deploy đầy đủ
+
+```bash
 bash deploy/scripts/deploy-pm2.sh
 ```
 
