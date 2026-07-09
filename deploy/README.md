@@ -232,9 +232,17 @@ grep DATABASE_URL backend/.env
 | Container không có | `docker compose up -d postgres` |
 | Mật khẩu sai | Sửa `backend/.env` → `postgresql://postgres:postgres@localhost:5432/nhatom?schema=public` rồi `pm2 restart nhatom-api` |
 | `P1000 Authentication failed` nhưng container đang chạy | DB volume tạo với mật khẩu cũ — chạy `bash deploy/scripts/fix-postgres-password.sh` |
+| `role "postgres" is not permitted to log in` | Container dùng `POSTGRES_USER` khác `postgres` — dùng script mới (tự detect user) hoặc xem mục dưới |
 
 ```bash
-# Đồng bộ mật khẩu postgres trong container về "postgres" (khớp backend/.env mặc định)
+# Chẩn đoán nhanh
+bash deploy/scripts/diagnose-db.sh
+
+# Xem user thật trong container (KHÔNG phải lúc nào cũng là "postgres")
+docker exec nhatom-postgres sh -c 'echo USER=$POSTGRES_USER DB=$POSTGRES_DB'
+grep DATABASE_URL backend/.env
+
+# Đồng bộ mật khẩu user thật trong container (script tự đọc POSTGRES_USER)
 bash deploy/scripts/fix-postgres-password.sh
 
 cd backend

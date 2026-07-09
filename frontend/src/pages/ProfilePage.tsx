@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Grid3x3, Waves, Settings, MapPin, Loader2, List, Map as MapIcon, Users, Check, X, Building2 } from "lucide-react";
+import { Grid3x3, Waves, Settings, MapPin, Loader2, List, Map as MapIcon, Users, Check, X, Building2, Heart, MessageCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AddPondModal } from "@/components/AddPondModal";
@@ -36,6 +36,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { type PostItem, resolvePostImageUrl } from "@/lib/posts";
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -52,18 +59,7 @@ type ProfileUser = {
   avatarUrl?: string | null;
 };
 
-type ProfilePost = {
-  id: string;
-  preview: string;
-};
-
-type PostRow = {
-  id: string;
-  content: string;
-  author: {
-    id: string;
-  };
-};
+type ProfilePost = PostItem;
 
 type PondRow = {
   id: string;
@@ -140,6 +136,40 @@ const truncate = (value: string, maxLength: number): string => {
   }
 
   return `${normalized.slice(0, maxLength - 1)}…`;
+};
+
+const getInitials = (name: string): string => {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+};
+
+const formatRelativeTime = (value: string): string => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Vừa xong";
+  }
+
+  const diffMs = Date.now() - parsed.getTime();
+  if (diffMs < 60_000) {
+    return "Vừa xong";
+  }
+
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  if (diffMinutes < 60) {
+    return `${diffMinutes} phút trước`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours} giờ trước`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} ngày trước`;
 };
 
 const isFiniteNumber = (value: unknown): value is number => {
@@ -250,6 +280,7 @@ const ProfilePage = () => {
   const [postLoadError, setPostLoadError] = useState<string | null>(null);
   const [pondTotal, setPondTotal] = useState<number | null>(null);
   const [postTotal, setPostTotal] = useState<number | null>(null);
+  const [selectedPost, setSelectedPost] = useState<ProfilePost | null>(null);
   const [selectedPondIdForTasks, setSelectedPondIdForTasks] = useState<string>("");
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>("");
 
@@ -487,7 +518,7 @@ const ProfilePage = () => {
       setPostLoadError(null);
 
       try {
-        const response = await http.get<ApiEnvelope<PostRow[]>>("/posts", {
+        const response = await http.get<ApiEnvelope<ProfilePost[]>>("/posts", {
           params: {
             page: 1,
             limit: 50,
@@ -504,12 +535,7 @@ const ProfilePage = () => {
             ? response.data.meta.total
             : response.data.data.length;
 
-        setPosts(
-          response.data.data.map((post) => ({
-            id: post.id,
-            preview: truncate(post.content, 58),
-          })),
-        );
+        setPosts(response.data.data);
         setPostTotal(totalPosts);
       } catch (error) {
         if (!isMounted) {
@@ -1000,14 +1026,30 @@ const ProfilePage = () => {
             )}
 
             {!isLoadingPosts && !postLoadError &&
-              posts.map((post) => (
-                <div
-                  key={post.id}
-                  className="aspect-square bg-secondary rounded-lg flex items-center justify-center p-3 hover:bg-ocean-light transition-colors cursor-pointer"
-                >
-                  <p className="text-xs text-secondary-foreground text-center font-medium">{post.preview}</p>
-                </div>
-              ))}
+              posts.map((post) => {
+                const imageUrl = resolvePostImageUrl(post.imageUrl);
+
+                return (
+                  <button
+                    key={post.id}
+                    type="button"
+                    onClick={() => setSelectedPost(post)}
+                    className="aspect-square bg-secondary rounded-lg overflow-hidden flex items-center justify-center p-3 hover:opacity-90 transition-opacity cursor-pointer"
+                  >
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt="Ảnh bài viết"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <p className="text-xs text-secondary-foreground text-center font-medium line-clamp-4">
+                        {truncate(post.content, 58)}
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
           </div>
         )}
 
@@ -1277,6 +1319,53 @@ const ProfilePage = () => {
         avatarUrl={profileUser?.avatarUrl}
         onProfileUpdated={handleProfileUpdated}
       />
+
+      <Dialog open={selectedPost !== null} onOpenChange={(open) => !open && setSelectedPost(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          {selectedPost && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="sr-only">Chi tiết bài viết</DialogTitle>
+                <div className="flex items-center gap-3 pr-8">
+                  <Avatar className="w-10 h-10">
+                    {resolvedAvatarUrl ? (
+                      <AvatarImage src={resolvedAvatarUrl} alt={selectedPost.author.fullName} />
+                    ) : null}
+                    <AvatarFallback className="bg-secondary text-secondary-foreground text-sm font-medium">
+                      {getInitials(selectedPost.author.fullName)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{selectedPost.author.fullName}</p>
+                    <p className="text-xs text-muted-foreground">{formatRelativeTime(selectedPost.createdAt)}</p>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{selectedPost.content}</p>
+
+              {resolvePostImageUrl(selectedPost.imageUrl) && (
+                <img
+                  src={resolvePostImageUrl(selectedPost.imageUrl)!}
+                  alt="Ảnh bài viết"
+                  className="w-full max-h-[420px] object-cover rounded-lg border border-border"
+                />
+              )}
+
+              <div className="flex items-center gap-4 pt-3 border-t border-border text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Heart className={`w-4 h-4 ${selectedPost.liked ? "fill-current text-coral" : ""}`} />
+                  {selectedPost.likeCount}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <MessageCircle className="w-4 h-4" />
+                  {selectedPost.commentCount}
+                </span>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 };

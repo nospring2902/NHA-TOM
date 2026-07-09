@@ -64,10 +64,9 @@ deploy_backend() {
   mkdir -p uploads/avatars uploads/posts
 
   if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
-    pm2 restart "$PM2_APP"
-  else
-    pm2 start dist/main.js --name "$PM2_APP"
+    pm2 delete "$PM2_APP"
   fi
+  pm2 start dist/main.js --name "$PM2_APP" --cwd "$ROOT_DIR/backend"
   pm2 save
 
   verify_backend_database || exit 1

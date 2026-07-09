@@ -39,10 +39,9 @@ mkdir -p uploads/avatars uploads/posts
 
 echo "==> [3/6] Backend: khởi động PM2..."
 if pm2 describe nhatom-api >/dev/null 2>&1; then
-  pm2 restart nhatom-api
-else
-  pm2 start dist/main.js --name nhatom-api
+  pm2 delete nhatom-api
 fi
+pm2 start dist/main.js --name nhatom-api --cwd "$ROOT_DIR/backend"
 pm2 save
 
 cd "$ROOT_DIR"
