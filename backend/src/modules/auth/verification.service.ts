@@ -53,6 +53,31 @@ export class VerificationService {
     });
   }
 
+  async issuePasswordChangeCode(user: User): Promise<boolean> {
+    const code = this.generateCode();
+    const expiresAt = this.getExpiryDate();
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordChangeCodeHash: this.hashCode(code),
+        passwordChangeExpiresAt: expiresAt,
+      },
+    });
+
+    try {
+      await this.sendPasswordChangeCode(user.email, user.fullName, code, expiresAt);
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to send password change code', error);
+      return false;
+    }
+  }
+
+  assertPasswordChangeCode(user: User, code: string) {
+    this.assertValidCode(code, user.passwordChangeCodeHash, user.passwordChangeExpiresAt);
+  }
+
   async isUserVerified(userId: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -108,6 +133,19 @@ export class VerificationService {
       to: email,
       subject: 'Ma xac minh tai khoan NHATOM',
       text: `Xin chao ${fullName},\n\nMa xac minh cua ban la: ${code}.\nMa co hieu luc trong ${ttlMinutes} phut (den ${expiresAt.toLocaleTimeString()}).\n\nNeu ban khong yeu cau, vui long bo qua email nay.`,
+    });
+  }
+
+  private async sendPasswordChangeCode(email: string, fullName: string, code: string, expiresAt: Date) {
+    const transporter = this.getMailTransporter();
+    const from = this.configService.get<string>('EMAIL_FROM') ?? 'NHATOM <no-reply@nhatom.local>';
+    const ttlMinutes = this.configService.get<string>('VERIFICATION_CODE_TTL_MINUTES') ?? '10';
+
+    await transporter.sendMail({
+      from,
+      to: email,
+      subject: 'Ma xac nhan doi mat khau NHATOM',
+      text: `Xin chao ${fullName},\n\nBan vua yeu cau doi mat khau tai khoan NHATOM.\nMa xac nhan cua ban la: ${code}.\nMa co hieu luc trong ${ttlMinutes} phut (den ${expiresAt.toLocaleTimeString()}).\n\nNeu ban khong yeu cau doi mat khau, vui long bo qua email nay va doi mat khau ngay.`,
     });
   }
 

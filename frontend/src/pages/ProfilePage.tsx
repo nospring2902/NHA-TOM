@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Grid3x3, Waves, Settings, MapPin, Loader2, List, Map as MapIcon, Users, Check, X, Building2 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AddPondModal } from "@/components/AddPondModal";
+import { ProfileSettingsDialog } from "@/components/ProfileSettingsDialog";
+import { resolveAvatarUrl } from "@/lib/users";
 import { DeviceSignalStatus } from "@/components/DeviceSignalStatus";
 import { PondsMapView } from "@/components/PondsMapView";
 import {
@@ -47,6 +49,7 @@ type ProfileUser = {
   fullName: string;
   email: string;
   role: string;
+  avatarUrl?: string | null;
 };
 
 type ProfilePost = {
@@ -232,6 +235,7 @@ const ProfilePage = () => {
   const [profileUser, setProfileUser] = useState<ProfileUser | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const currentUserId = profileUser?.id ?? session?.user.id ?? null;
 
   const [activeTab, setActiveTab] = useState<"posts" | "ponds" | "farm">("ponds");
@@ -767,6 +771,25 @@ const ProfilePage = () => {
 
   const pondsMissingCoordinatesCount = ponds.length - pondsWithCoordinates.length;
   const displayName = profileUser?.fullName ?? session?.user.fullName ?? "Người dùng";
+  const profileEmail = profileUser?.email ?? session?.user.email ?? "";
+  const resolvedAvatarUrl = resolveAvatarUrl(profileUser?.avatarUrl);
+
+  const handleProfileUpdated = useCallback(
+    (patch: { fullName?: string; avatarUrl?: string | null }) => {
+      setProfileUser((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
+          ...(patch.avatarUrl !== undefined ? { avatarUrl: patch.avatarUrl } : {}),
+        };
+      });
+    },
+    [],
+  );
   const pondsCount = pondTotal ?? ponds.length;
   const postsCount = postTotal ?? posts.length;
 
@@ -777,6 +800,9 @@ const ProfilePage = () => {
         <div className="bg-card rounded-xl border border-border shadow-card p-6 mb-5">
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <Avatar className="w-24 h-24">
+              {resolvedAvatarUrl ? (
+                <AvatarImage src={resolvedAvatarUrl} alt={displayName} />
+              ) : null}
               <AvatarFallback className="gradient-ocean text-primary-foreground text-2xl font-bold">
                 {displayName
                   .split(" ")
@@ -817,7 +843,13 @@ const ProfilePage = () => {
                 </div>
               </div>
             </div>
-            <Button variant="outline" size="icon" className="shrink-0">
+            <Button
+              variant="outline"
+              size="icon"
+              className="shrink-0"
+              onClick={() => setIsSettingsOpen(true)}
+              aria-label="Cài đặt thông tin cá nhân"
+            >
               <Settings className="w-4 h-4" />
             </Button>
           </div>
@@ -1114,6 +1146,15 @@ const ProfilePage = () => {
           </div>
         )}
       </div>
+
+      <ProfileSettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        displayName={displayName}
+        email={profileEmail}
+        avatarUrl={profileUser?.avatarUrl}
+        onProfileUpdated={handleProfileUpdated}
+      />
     </AppLayout>
   );
 };

@@ -101,9 +101,13 @@ model User {
   fullName             String
   passwordHash         String
   phone                String?
+  avatarUrl            String?
   emailVerifiedAt      DateTime?
   emailVerificationCodeHash String?
   emailVerificationExpiresAt DateTime?
+  pendingPasswordHash        String?
+  passwordChangeCodeHash     String?
+  passwordChangeExpiresAt    DateTime?
   role                 UserRole          @default(FARM_STAFF)
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
