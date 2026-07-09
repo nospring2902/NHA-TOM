@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Droplets, Mail } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AppBrand } from "@/components/AppBrand";
 import { toast } from "sonner";
 import VerificationStepper from "@/components/VerificationStepper";
 import { getApiErrorMessage } from "@/lib/device-binding";
@@ -79,10 +80,7 @@ const VerifyEmailPage = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <Droplets className="w-8 h-8 text-primary" />
-            <span className="text-2xl font-bold text-foreground">AquaShrimp</span>
-          </Link>
+          <AppBrand to="/" size="lg" className="mb-6" />
         </div>
 
         <div className="bg-card rounded-xl border border-border shadow-card p-6">
