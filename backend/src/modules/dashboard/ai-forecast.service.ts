@@ -243,7 +243,7 @@ export class AiForecastService {
 
   private getNumNodes() {
     const raw = process.env.NHATOM_AI_NUM_NODES;
-    const value = raw ? Number(raw) : 10;
-    return Number.isFinite(value) && value > 0 ? value : 10;
+    const value = raw ? Number(raw) : 5;
+    return Number.isFinite(value) && value > 0 ? value : 5;
   }
 }
