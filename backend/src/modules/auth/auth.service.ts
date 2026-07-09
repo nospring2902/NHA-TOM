@@ -209,6 +209,63 @@ export class AuthService {
     };
   }
 
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+
+    // Always return success to avoid revealing whether an email is registered
+    if (!user) {
+      return {
+        success: true,
+        message: 'Nếu email tồn tại, mã đặt lại mật khẩu đã được gửi.',
+      };
+    }
+
+    await this.verificationService.issueForgotPasswordCode(user);
+
+    return {
+      success: true,
+      message: 'Nếu email tồn tại, mã đặt lại mật khẩu đã được gửi.',
+    };
+  }
+
+  async resetPassword(email: string, code: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+
+    this.verificationService.assertPasswordChangeCode(user, code.trim());
+
+    const newHash = createUserPasswordHash(newPassword);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: newHash,
+          pendingPasswordHash: null,
+          passwordChangeCodeHash: null,
+          passwordChangeExpiresAt: null,
+        },
+      });
+
+      await tx.userSession.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+
+    return {
+      success: true,
+      message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.',
+    };
+  }
+
   async resendEmailVerification(email: string) {
     const user = await this.prisma.user.findUnique({
       where: {
