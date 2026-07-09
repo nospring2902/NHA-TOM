@@ -6,6 +6,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=lib/postgres.sh
+source "$ROOT_DIR/deploy/scripts/lib/postgres.sh"
 
 if [[ ! -f .env ]]; then
   echo "Chưa có .env ở thư mục gốc — tạo từ deploy/env.example..."
@@ -20,15 +22,7 @@ if [[ ! -f backend/.env ]]; then
 fi
 
 echo "==> [1/6] Khởi động PostgreSQL..."
-docker compose up -d postgres
-
-echo "==> Đợi PostgreSQL sẵn sàng..."
-for i in $(seq 1 30); do
-  if docker exec nhatom-postgres pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-nhatom}" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 2
-done
+ensure_postgres_running
 
 if [[ ! -f backend/.env ]]; then
   echo "Thiếu backend/.env — copy từ backend/.env.example hoặc deploy/env.example"
@@ -70,11 +64,7 @@ sudo cp -r dist/* /var/www/nhatom/
 cd "$ROOT_DIR"
 
 echo "==> [6/6] Kiểm tra health..."
-sleep 2
-curl -fsS http://127.0.0.1:3000/database/health || {
-  echo "Backend chưa phản hồi — kiểm tra: pm2 logs nhatom-api"
-  exit 1
-}
+verify_backend_database || exit 1
 
 echo ""
 echo "Deploy PM2 hoàn tất."

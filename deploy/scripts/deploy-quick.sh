@@ -13,6 +13,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=lib/postgres.sh
+source "$ROOT_DIR/deploy/scripts/lib/postgres.sh"
 
 WEB_ROOT="${NHATOM_WEB_ROOT:-/var/www/nhatom}"
 PM2_APP="${NHATOM_PM2_APP:-nhatom-api}"
@@ -52,6 +54,7 @@ ensure_backend_env() {
 deploy_backend() {
   echo "==> Deploy backend..."
   ensure_backend_env
+  ensure_postgres_running
 
   cd "$ROOT_DIR/backend"
   npm ci
@@ -67,11 +70,7 @@ deploy_backend() {
   fi
   pm2 save
 
-  sleep 2
-  curl -fsS http://127.0.0.1:3000/database/health >/dev/null || {
-    echo "Backend chưa phản hồi — xem: pm2 logs $PM2_APP"
-    exit 1
-  }
+  verify_backend_database || exit 1
 
   echo "Backend OK — pm2 status $PM2_APP"
 }

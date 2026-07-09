@@ -1,6 +1,7 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Heart, MessageCircle, Share2, Image, Send, MoreHorizontal, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import AppLayout from "@/components/AppLayout";
 import { getAuthSession } from "@/lib/auth";
@@ -405,17 +406,18 @@ const HomePage = () => {
                     onChange={handleSelectImage}
                     className="hidden"
                   />
-                  <input
+                  <Textarea
                     placeholder="Chia sẻ kinh nghiệm nuôi tôm..."
                     value={newPostContent}
                     onChange={(event) => setNewPostContent(event.target.value)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter") {
+                      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
                         event.preventDefault();
                         void handleCreatePost();
                       }
                     }}
-                    className="w-full bg-muted rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    rows={3}
+                    className="min-h-[80px] resize-y border-0 bg-muted rounded-lg px-4 py-2.5 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
                   />
                   {imagePreviewUrl && (
                     <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3">
@@ -516,7 +518,7 @@ const HomePage = () => {
                       <MoreHorizontal className="w-4 h-4" />
                     </Button>
                   </div>
-                  <p className="text-sm text-foreground leading-relaxed mb-4">{post.content}</p>
+                  <p className="text-sm text-foreground leading-relaxed mb-4 whitespace-pre-wrap">{post.content}</p>
                   {imageUrl && (
                     <div className="mb-4">
                       <img

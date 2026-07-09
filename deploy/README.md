@@ -216,6 +216,37 @@ bash deploy/scripts/backup-db.sh
 
 ---
 
+## Lỗi "Internal Server Error" / Database down
+
+Kiểm tra nhanh trên VPS:
+
+```bash
+curl http://127.0.0.1:3000/database/health
+docker ps | grep nhatom-postgres
+grep DATABASE_URL backend/.env
+```
+
+| Triệu chứng | Cách sửa |
+|---|---|
+| `"status":"down"` | Postgres chưa chạy hoặc `DATABASE_URL` sai mật khẩu |
+| Container không có | `docker compose up -d postgres` |
+| Mật khẩu sai | Sửa `backend/.env` → `postgresql://postgres:postgres@localhost:5432/nhatom?schema=public` rồi `pm2 restart nhatom-api` |
+| `P1000 Authentication failed` nhưng container đang chạy | DB volume tạo với mật khẩu cũ — chạy `bash deploy/scripts/fix-postgres-password.sh` |
+
+```bash
+# Đồng bộ mật khẩu postgres trong container về "postgres" (khớp backend/.env mặc định)
+bash deploy/scripts/fix-postgres-password.sh
+
+cd backend
+npx prisma migrate deploy
+pm2 restart nhatom-api
+curl http://127.0.0.1:3000/database/health
+```
+
+Deploy frontend **không** ảnh hưởng database. Nếu lỗi sau deploy backend, thường do Postgres container dừng hoặc `.env` không khớp.
+
+---
+
 ## DNS cần trỏ về IP VPS
 
 | Record | Type | Value |

@@ -410,9 +410,10 @@ const DashboardPage = () => {
 
   const active = chartConfig[activeChart];
   const isOwner = session?.user.id === pondOwnerId;
-  const pondSubtitle = pondInfo
-    ? `${pondInfo.areaM2.toLocaleString("vi-VN")} m² · ${pondInfo.location}`
-    : "Đang tải thông tin ao...";
+  const pondSubtitle =
+    pondInfo?.areaM2 != null && pondInfo.location
+      ? `${Number(pondInfo.areaM2).toLocaleString("vi-VN")} m² · ${pondInfo.location}`
+      : pondInfo?.location ?? "Đang tải thông tin ao...";
 
   return (
     <div className="min-h-screen bg-background">

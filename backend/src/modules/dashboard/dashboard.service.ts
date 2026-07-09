@@ -197,7 +197,20 @@ export class DashboardService {
       ORDER BY day ASC
     `);
 
-    const forecast = await this.aiForecastService.predict(dailyRows);
+    let forecast: Awaited<ReturnType<AiForecastService['predict']>>;
+    try {
+      forecast = await this.aiForecastService.predict(dailyRows);
+    } catch {
+      return {
+        success: true,
+        message: 'Chưa thể chạy dự báo AI (model hoặc dữ liệu chưa sẵn sàng)',
+        data: {
+          pondId,
+          generatedAt: new Date().toISOString(),
+          horizons: [],
+        },
+      };
+    }
 
     const horizons = forecast.horizons.map((horizon) => {
       const score = this.calculateWaterScore(horizon.metrics);
