@@ -102,6 +102,10 @@
     @apply border-border;
   }
 
+  html {
+    font-family: var(--font-body);
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-body);

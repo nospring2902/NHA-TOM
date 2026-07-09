@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Droplets, User, Mail, Lock, Phone, Calendar, Eye, EyeOff, Loader2 } from "lucide-react";
+import { User, Mail, Lock, Phone, Calendar, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import VerificationStepper from "@/components/VerificationStepper";
+import { AppBrand } from "@/components/AppBrand";
 import { toast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/device-binding";
 import { http } from "@/lib/http";
@@ -69,10 +70,7 @@ const RegisterPage = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <Droplets className="w-8 h-8 text-primary" />
-            <span className="text-2xl font-bold text-foreground">AquaShrimp</span>
-          </Link>
+          <AppBrand to="/" size="lg" className="mb-6" />
           <h1 className="text-2xl font-bold text-foreground">Tạo tài khoản</h1>
           <p className="text-muted-foreground mt-1">Bắt đầu giám sát ao tôm của bạn</p>
         </div>

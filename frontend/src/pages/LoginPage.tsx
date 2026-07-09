@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Droplets, Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AppBrand } from "@/components/AppBrand";
 import { toast } from "@/hooks/use-toast";
 import { saveAuthSession } from "@/lib/auth";
 import { getApiErrorMessage } from "@/lib/device-binding";
@@ -71,10 +72,7 @@ const LoginPage = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <Droplets className="w-8 h-8 text-primary" />
-            <span className="text-2xl font-bold text-foreground">Nhà tôm </span>
-          </Link>
+          <AppBrand to="/" size="lg" className="mb-6" />
           <h1 className="text-2xl font-bold text-foreground">Đăng nhập</h1>
           <p className="text-muted-foreground mt-1">Chào mừng bạn trở lại</p>
         </div>

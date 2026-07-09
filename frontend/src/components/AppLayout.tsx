@@ -1,9 +1,11 @@
-import { Link, useLocation } from "react-router-dom";
-import { Home, User, MessageCircle, Droplets, Cpu, ClipboardList, Bell } from "lucide-react";
-import { getAuthSession } from "@/lib/auth";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Home, User, Cpu, ClipboardList, Bell, LogOut } from "lucide-react";
+import { clearAuthSession, getAuthSession } from "@/lib/auth";
 import SearchBar from "@/components/SearchBar";
 import ChatDock from "@/components/ChatDock";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { AppBrand } from "@/components/AppBrand";
+import { Button } from "@/components/ui/button";
 
 const baseNavItems = [
   { to: "/home", icon: Home, label: "Trang chủ" },
@@ -14,6 +16,7 @@ const baseNavItems = [
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const session = getAuthSession();
   const { unreadCount } = useNotifications();
   const navItems =
@@ -21,15 +24,17 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       ? [...baseNavItems, { to: "/admin/devices", icon: Cpu, label: "Admin Devices" }]
       : baseNavItems;
 
+  const handleLogout = () => {
+    clearAuthSession();
+    navigate("/login");
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Top nav */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-card/90 backdrop-blur-lg border-b border-border h-14">
         <div className="container h-full flex items-center gap-6">
-          <Link to="/home" className="flex items-center gap-2 shrink-0">
-            <Droplets className="w-6 h-6 text-primary" />
-            <span className="text-lg font-bold text-foreground">Nhà tôm </span>
-          </Link>
+          <AppBrand to="/home" size="md" className="shrink-0" />
           <div className="flex-1 hidden md:block">
             <SearchBar />
           </div>
@@ -55,7 +60,25 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                 {item.label}
               </Link>
             ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-muted-foreground hover:text-destructive gap-2 ml-1"
+            >
+              <LogOut className="w-4 h-4" />
+              Đăng xuất
+            </Button>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            className="md:hidden ml-auto text-muted-foreground hover:text-destructive"
+            aria-label="Đăng xuất"
+          >
+            <LogOut className="w-5 h-5" />
+          </Button>
         </div>
       </header>
 

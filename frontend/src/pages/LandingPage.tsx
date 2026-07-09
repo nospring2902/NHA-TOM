@@ -1,11 +1,12 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Droplets, BarChart3, Users, Shield, Waves, Thermometer, Activity, Bell } from "lucide-react";
+import { BarChart3, Users, Shield, Waves, Activity, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppBrand } from "@/components/AppBrand";
 import heroBg from "@/assets/hero-bg.jpg";
 
 const features = [
-  { icon: Droplets, title: "Giám sát thời gian thực", desc: "Theo dõi pH, DO, nhiệt độ, độ mặn liên tục 24/7" },
+  { icon: Activity, title: "Giám sát thời gian thực", desc: "Theo dõi pH, DO, nhiệt độ, độ mặn liên tục 24/7" },
   { icon: BarChart3, title: "Dự đoán thông minh", desc: "AI dự đoán biến động chất lượng nước trong 6-24h tới" },
   { icon: Users, title: "Cộng đồng nuôi tôm", desc: "Kết nối, chia sẻ kinh nghiệm với hàng nghìn nông dân" },
   { icon: Shield, title: "Cảnh báo tức thì", desc: "Nhận thông báo ngay khi phát hiện bất thường" },
@@ -19,16 +20,17 @@ const LandingPage = () => {
       {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="container flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <Droplets className="w-7 h-7 text-primary" />
-            <span className="text-xl font-bold text-foreground">Nhà tôm </span>
-          </div>
+          <AppBrand size="md" />
           <div className="flex items-center gap-3">
             <Link to="/login">
-              <Button variant="ghost" size="sm">Đăng nhập</Button>
+              <Button variant="ghost" size="sm" className="text-foreground">
+                Đăng nhập
+              </Button>
             </Link>
             <Link to="/register">
-              <Button size="sm" className="gradient-ocean text-primary-foreground border-0">Đăng ký</Button>
+              <Button size="sm" className="gradient-ocean text-primary-foreground border-0">
+                Đăng ký
+              </Button>
             </Link>
           </div>
         </div>
@@ -61,7 +63,11 @@ const LandingPage = () => {
                   Bắt đầu miễn phí
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="text-primary-foreground border-primary-foreground/30 hover:bg-primary-foreground/10 text-base px-8">
+              <Button
+                size="lg"
+                variant="outline"
+                className="bg-transparent text-white border-white/40 hover:bg-white/10 hover:text-white text-base px-8"
+              >
                 Tìm hiểu thêm
               </Button>
             </div>
@@ -140,11 +146,10 @@ const LandingPage = () => {
       {/* Footer */}
       <footer className="py-10 bg-card border-t border-border">
         <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Droplets className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-foreground">Nhà tôm </span>
-          </div>
-          <p className="text-sm text-muted-foreground">© 2026 Nhà tôm . Nền tảng giám sát ao tôm thông minh.</p>
+          <AppBrand size="sm" />
+          <p className="text-sm text-muted-foreground">
+            © 2026 Nhà Tôm. Nền tảng giám sát ao tôm thông minh.
+          </p>
         </div>
       </footer>
     </div>

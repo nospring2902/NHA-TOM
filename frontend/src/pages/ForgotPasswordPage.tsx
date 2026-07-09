@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Droplets,
   Eye,
   EyeOff,
   KeyRound,
@@ -13,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AppBrand } from "@/components/AppBrand";
 import { toast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/device-binding";
 import { http } from "@/lib/http";
@@ -117,10 +117,7 @@ const ForgotPasswordPage = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <Droplets className="w-8 h-8 text-primary" />
-            <span className="text-2xl font-bold text-foreground">Nhà tôm</span>
-          </Link>
+          <AppBrand to="/" size="lg" className="mb-6" />
           <h1 className="text-2xl font-bold text-foreground">
             {step === "request" ? "Quên mật khẩu" : "Đặt lại mật khẩu"}
           </h1>
