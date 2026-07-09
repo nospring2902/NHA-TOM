@@ -11,6 +11,7 @@ import { MembersPanel } from "@/components/MembersPanel";
 import { TaskBoard } from "@/components/TaskBoard";
 import { getPond } from "@/lib/device-binding";
 import { getAuthSession } from "@/lib/auth";
+import { useRealtime } from "@/contexts/RealtimeContext";
 const STATUS_LABEL: Record<BoundDevice["status"], string> = {
   INACTIVE: "Chưa kích hoạt",
   WAITING_SIGNAL: "Đang chờ tín hiệu",
@@ -102,6 +103,7 @@ const DashboardPage = () => {
   const [forecastError, setForecastError] = useState<string | null>(null);
   const [isForecastLoading, setIsForecastLoading] = useState(true);
   const [pondOwnerId, setPondOwnerId] = useState<string | null>(null);
+  const { socket } = useRealtime();
 
   useEffect(() => {
     let mounted = true;
@@ -156,6 +158,61 @@ const DashboardPage = () => {
       window.clearInterval(timer);
     };
   }, [pondId]);
+
+  // Cập nhật trạng thái thiết bị tức thì qua push realtime (đồng bộ chủ ao & thành viên).
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDeviceStatus = (payload: {
+      pondId: string;
+      deviceId: string;
+      status: BoundDevice["status"];
+      lastTelemetryAt: string | null;
+      telemetryPackets?: number;
+    }) => {
+      if (payload.pondId !== pondId) {
+        return;
+      }
+
+      setBoundDevices((current) => {
+        let hasChanges = false;
+
+        const next = current.map((device) => {
+          if (device.id !== payload.deviceId) {
+            return device;
+          }
+
+          const nextTelemetryPackets =
+            typeof payload.telemetryPackets === "number"
+              ? payload.telemetryPackets
+              : device.telemetryPackets;
+
+          if (
+            device.status === payload.status &&
+            device.lastTelemetryAt === payload.lastTelemetryAt &&
+            device.telemetryPackets === nextTelemetryPackets
+          ) {
+            return device;
+          }
+
+          hasChanges = true;
+          return {
+            ...device,
+            status: payload.status,
+            lastTelemetryAt: payload.lastTelemetryAt,
+            telemetryPackets: nextTelemetryPackets,
+          };
+        });
+
+        return hasChanges ? next : current;
+      });
+    };
+
+    socket.on("device:status", handleDeviceStatus);
+    return () => {
+      socket.off("device:status", handleDeviceStatus);
+    };
+  }, [socket, pondId]);
 
   useEffect(() => {
     let mounted = true;

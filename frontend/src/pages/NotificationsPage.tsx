@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from "react";
-import { Bell, Loader2, CheckCircle2, UserPlus, MessageSquare, ClipboardList, Clock, Briefcase } from "lucide-react";
+import { Bell, Loader2, CheckCircle2, UserPlus, MessageSquare, ClipboardList, Clock, Briefcase, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/AppLayout";
 import { listNotifications, type NotificationItem, markNotificationRead, markAllNotificationsRead } from "@/lib/notifications";
@@ -10,10 +10,11 @@ import { getAuthSession } from "@/lib/auth";
 import { toast } from "@/hooks/use-toast";
 import { acceptInvite as acceptFarmInvite, rejectInvite as rejectFarmInvite, listMyInvites, type FarmInvite } from "@/lib/collaboration";
 
-type TabValue = "ALL" | "FRIEND" | "TASK" | "CHAT" | "FARM";
+type TabValue = "ALL" | "ALERT" | "FRIEND" | "TASK" | "CHAT" | "FARM";
 
 const TABS: { id: TabValue; label: string; types?: string[] }[] = [
   { id: "ALL", label: "Tất cả" },
+  { id: "ALERT", label: "Cảnh báo ao", types: ["alert"] },
   { id: "FRIEND", label: "Lời mời kết bạn", types: ["friend_request", "friend_accepted"] },
   { id: "TASK", label: "Nhiệm vụ", types: ["task_assigned", "task_updated"] },
   { id: "CHAT", label: "Tin nhắn", types: ["chat_message"] },
@@ -167,6 +168,7 @@ export default function NotificationsPage() {
   };
 
   const getIcon = (type: string) => {
+    if (type.startsWith("alert")) return <AlertTriangle className="h-5 w-5 text-red-500" />;
     if (type.startsWith("friend")) return <UserPlus className="h-5 w-5 text-blue-500" />;
     if (type.startsWith("chat")) return <MessageSquare className="h-5 w-5 text-green-500" />;
     if (type.startsWith("task")) return <ClipboardList className="h-5 w-5 text-purple-500" />;

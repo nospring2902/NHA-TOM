@@ -117,6 +117,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       toast({
         title: payload.title,
         description: payload.body,
+        variant: payload.type?.startsWith("alert") ? "destructive" : "default",
       });
     };
 
