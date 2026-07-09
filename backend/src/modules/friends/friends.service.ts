@@ -27,6 +27,9 @@ export class FriendsService {
     const friends = await this.prisma.friend.findMany({
       where: {
         userId,
+        friend: {
+          role: { not: 'ADMIN' },
+        },
       },
       include: {
         friend: {

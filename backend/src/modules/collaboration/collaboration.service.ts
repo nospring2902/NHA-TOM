@@ -23,6 +23,20 @@ export class CollaborationService {
       throw new BadRequestException('Không thể mời chính mình');
     }
 
+    // Check invitee exists and is not an admin
+    const invitee = await this.prisma.user.findUnique({
+      where: { id: friendId },
+      select: { id: true, role: true },
+    });
+
+    if (!invitee) {
+      throw new NotFoundException('Không tìm thấy người dùng');
+    }
+
+    if (invitee.role === 'ADMIN') {
+      throw new BadRequestException('Không thể mời admin cộng tác');
+    }
+
     // Check friendship
     const friendship = await this.prisma.friend.findUnique({
       where: {
