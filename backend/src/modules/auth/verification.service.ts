@@ -78,6 +78,28 @@ export class VerificationService {
     this.assertValidCode(code, user.passwordChangeCodeHash, user.passwordChangeExpiresAt);
   }
 
+  async issueForgotPasswordCode(user: User): Promise<boolean> {
+    const code = this.generateCode();
+    const expiresAt = this.getExpiryDate();
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordChangeCodeHash: this.hashCode(code),
+        passwordChangeExpiresAt: expiresAt,
+        pendingPasswordHash: null,
+      },
+    });
+
+    try {
+      await this.sendForgotPasswordCode(user.email, user.fullName, code, expiresAt);
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to send forgot password code', error);
+      return false;
+    }
+  }
+
   async isUserVerified(userId: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -133,6 +155,19 @@ export class VerificationService {
       to: email,
       subject: 'Ma xac minh tai khoan NHATOM',
       text: `Xin chao ${fullName},\n\nMa xac minh cua ban la: ${code}.\nMa co hieu luc trong ${ttlMinutes} phut (den ${expiresAt.toLocaleTimeString()}).\n\nNeu ban khong yeu cau, vui long bo qua email nay.`,
+    });
+  }
+
+  private async sendForgotPasswordCode(email: string, fullName: string, code: string, expiresAt: Date) {
+    const transporter = this.getMailTransporter();
+    const from = this.configService.get<string>('EMAIL_FROM') ?? 'NHATOM <no-reply@nhatom.local>';
+    const ttlMinutes = this.configService.get<string>('VERIFICATION_CODE_TTL_MINUTES') ?? '10';
+
+    await transporter.sendMail({
+      from,
+      to: email,
+      subject: 'Dat lai mat khau NHATOM',
+      text: `Xin chao ${fullName},\n\nChung toi nhan duoc yeu cau dat lai mat khau cho tai khoan NHATOM gan voi email nay.\nMa xac nhan cua ban la: ${code}.\nMa co hieu luc trong ${ttlMinutes} phut (den ${expiresAt.toLocaleTimeString()}).\n\nNeu ban khong gui yeu cau nay, vui long bo qua email nay. Mat khau cua ban van an toan.`,
     });
   }
 

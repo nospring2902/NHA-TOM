@@ -3,10 +3,12 @@ import type { Request } from 'express';
 import { AuthContextService } from './auth-context.service';
 import { Public } from './decorators/public.decorator';
 import { AuthService } from './auth.service';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 
 @Controller('api/v1/auth')
@@ -44,6 +46,18 @@ export class AuthController {
   @Post('resend-email')
   async resendEmail(@Body() payload: ResendVerificationDto) {
     return this.authService.resendEmailVerification(payload.email);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  async forgotPassword(@Body() payload: ForgotPasswordDto) {
+    return this.authService.forgotPassword(payload.email);
+  }
+
+  @Public()
+  @Post('reset-password')
+  async resetPassword(@Body() payload: ResetPasswordDto) {
+    return this.authService.resetPassword(payload.email, payload.code, payload.newPassword);
   }
 
   @Get('me')
