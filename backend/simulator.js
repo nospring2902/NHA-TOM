@@ -119,11 +119,11 @@ function buildPayload(token) {
   const location = resolveDeviceLocation(token);
 
   return {
-    // Mostly keep values in ideal ranges, with rare outliers to trigger alerts.
+    // Match actual Arduino hardware sensor format
     temperature: sampleWithOutlier(28, 30, 26.5, 27.5, 30.5, 32, 2),
-    ph: sampleWithOutlier(7.8, 8.2, 7.2, 7.6, 8.4, 8.8, 2),
-    dissolved_oxygen: sampleWithOutlier(5.5, 7.0, 4.6, 5.2, 7.2, 8.0, 2),
-    salinity: sampleWithOutlier(15, 25, 10, 14, 26, 30, 1),
+    pH: sampleWithOutlier(7.8, 8.2, 7.2, 7.6, 8.4, 8.8, 2),
+    turbidity: sampleWithOutlier(20, 80, 0, 15, 150, 300, 1),
+    tds: sampleWithOutlier(200, 800, 50, 150, 1000, 2000, 0),
     latitude: location.latitude,
     longitude: location.longitude,
   };

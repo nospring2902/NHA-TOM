@@ -245,9 +245,13 @@ export class DashboardService {
   }): number | null {
     const factors = [
       this.buildRangeFactor(metrics.ph, 7.8, 8.2, 7.2, 8.8, 1.0),
-      this.buildRangeFactor(metrics.dissolvedOxygen, 5.5, 7.0, 4.6, 8.0, 1.3),
+      // dissolvedOxygen field is now storing Turbidity (NTU)
+      // Ngưỡng giả định: Lý tưởng 0-100 NTU, Cảnh báo nếu > 300 NTU
+      this.buildRangeFactor(metrics.dissolvedOxygen, 0.0, 100.0, -10.0, 300.0, 1.3),
       this.buildRangeFactor(metrics.temperature, 28.0, 30.0, 26.5, 32.0, 1.0),
-      this.buildRangeFactor(metrics.salinity, 15.0, 25.0, 10.0, 30.0, 1.0),
+      // salinity field is now storing TDS (mg/L)
+      // Ngưỡng giả định: Lý tưởng 500-2000 mg/L, Cảnh báo nếu < 100 hoặc > 3000 mg/L
+      this.buildRangeFactor(metrics.salinity, 500.0, 2000.0, 100.0, 3000.0, 1.0),
     ].filter((factor): factor is { rating: number; weight: number } => factor != null);
 
     if (factors.length === 0) {

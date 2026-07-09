@@ -337,23 +337,32 @@ export class TelemetryService {
     const customPosition = this.asRecord(customPayload.position);
 
     const metrics = {
-      ph: this.resolveNumber(payload.metrics?.ph, payload.ph, customPayload.ph),
+      // ThingsBoard gửi "pH" (chữ hoa H), cần resolve cả hai dạng
+      ph: this.resolveNumber(payload.metrics?.ph, payload.ph, payload.pH, customPayload.ph, customPayload.pH),
+      // Thiết bị dùng "turbidity" thay vì "dissolvedOxygen"
       dissolvedOxygen: this.resolveNumber(
         payload.metrics?.dissolvedOxygen,
+        payload.metrics?.turbidity,
         payload.dissolvedOxygen,
         payload.dissolved_oxygen,
+        payload.turbidity,
         customPayload.dissolvedOxygen,
         customPayload.dissolved_oxygen,
+        customPayload.turbidity,
       ),
       temperature: this.resolveNumber(
         payload.metrics?.temperature,
         payload.temperature,
         customPayload.temperature,
       ),
+      // Thiết bị dùng "tds" thay vì "salinity"
       salinity: this.resolveNumber(
         payload.metrics?.salinity,
+        payload.metrics?.tds,
         payload.salinity,
+        payload.tds,
         customPayload.salinity,
+        customPayload.tds,
       ),
     };
 
