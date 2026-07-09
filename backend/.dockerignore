@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+uploads/*
+!uploads/.gitkeep
+!uploads/avatars/.gitkeep
+!uploads/posts/.gitkeep
+*.log
+.git

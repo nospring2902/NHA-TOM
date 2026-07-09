@@ -1,0 +1,24 @@
+{
+  "note": "Mẫu body gửi từ ThingsBoard Rule Chain → REST API Call node",
+  "url": "https://api.nhatom.vn/api/v1/telemetry/ingest",
+  "method": "POST",
+  "headers": {
+    "Content-Type": "application/json",
+    "x-ingest-token": "<THINGSBOARD_INGEST_TOKEN>"
+  },
+  "body": {
+    "deviceToken": "${deviceName}",
+    "serialNumber": "${deviceName}",
+    "timestamp": "${ts}",
+    "metrics": {
+      "ph": "${pH}",
+      "dissolvedOxygen": "${turbidity}",
+      "temperature": "${temperature}",
+      "salinity": "${tds}"
+    },
+    "geo": {
+      "lat": "${latitude}",
+      "lng": "${longitude}"
+    }
+  }
+}

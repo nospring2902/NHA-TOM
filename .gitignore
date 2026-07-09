@@ -42,7 +42,10 @@ coverage/
 .env
 .env.*
 !.env.example
+!**/.env.example
 !.env.template
+!**/.env.template
+deploy/env.example
 
 # --- Prisma / local dev DBs ---
 backend/prisma/*.db
@@ -56,6 +59,14 @@ backend/prisma/dev.db*
 **/postgres-data/
 **/pgdata/
 **/db-data/
+
+# --- Uploads (runtime files, không commit) ---
+backend/uploads/*
+!backend/uploads/.gitkeep
+!backend/uploads/avatars/
+!backend/uploads/avatars/.gitkeep
+!backend/uploads/posts/
+!backend/uploads/posts/.gitkeep
 
 # --- Editor / IDE ---
 .vscode/
