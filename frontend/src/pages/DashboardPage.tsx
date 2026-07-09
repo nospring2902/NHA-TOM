@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Droplets, Thermometer, Wind, Gauge, Power, ArrowLeft, CloudRain, Sun, AlertTriangle, Download, Activity, CheckCircle2, Bot, CalendarClock, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Droplets, Thermometer, Wind, Gauge, Power, ArrowLeft, CloudRain, Sun, AlertTriangle, Activity, CheckCircle2, Bot, CalendarClock, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { AddDeviceModal } from "@/components/AddDeviceModal";
-import { BoundDevice, getApiErrorMessage } from "@/lib/device-binding";
+import { BoundDevice, CreatedPond, getApiErrorMessage } from "@/lib/device-binding";
 import { DashboardForecast, DashboardRealtime, getDashboardForecast, getDashboardRealtime } from "@/lib/dashboard";
 import { MembersPanel } from "@/components/MembersPanel";
 import { TaskBoard } from "@/components/TaskBoard";
@@ -103,6 +103,7 @@ const DashboardPage = () => {
   const [forecastError, setForecastError] = useState<string | null>(null);
   const [isForecastLoading, setIsForecastLoading] = useState(true);
   const [pondOwnerId, setPondOwnerId] = useState<string | null>(null);
+  const [pondInfo, setPondInfo] = useState<CreatedPond | null>(null);
   const { socket } = useRealtime();
 
   useEffect(() => {
@@ -222,9 +223,21 @@ const DashboardPage = () => {
         const response = await getPond(pondId);
         if (mounted) {
           setPondOwnerId(response.data.ownerId);
+          setPondInfo({
+            id: response.data.id,
+            name: response.data.name,
+            location: response.data.location,
+            areaM2: response.data.areaM2,
+            latitude: response.data.latitude,
+            longitude: response.data.longitude,
+            geo: response.data.geo,
+            lifecycleStatus: response.data.lifecycleStatus,
+          });
         }
       } catch {
-        // silent fail
+        if (mounted) {
+          setPondInfo(null);
+        }
       }
     };
 
@@ -397,12 +410,15 @@ const DashboardPage = () => {
 
   const active = chartConfig[activeChart];
   const isOwner = session?.user.id === pondOwnerId;
+  const pondSubtitle = pondInfo
+    ? `${pondInfo.areaM2.toLocaleString("vi-VN")} m² · ${pondInfo.location}`
+    : "Đang tải thông tin ao...";
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card/90 backdrop-blur-lg border-b border-border sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
+        <div className="container flex items-center h-14">
           <div className="flex items-center gap-3">
             <Link to="/profile">
               <Button variant="ghost" size="icon" className="text-muted-foreground">
@@ -410,13 +426,10 @@ const DashboardPage = () => {
               </Button>
             </Link>
             <div>
-              <h1 className="text-base font-bold text-foreground">Ao Tôm A{pondId}</h1>
-              <p className="text-xs text-muted-foreground">2,000 m² · Cà Mau</p>
+              <h1 className="text-base font-bold text-foreground">{pondInfo?.name ?? "Ao tôm"}</h1>
+              <p className="text-xs text-muted-foreground">{pondSubtitle}</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" className="gap-2 text-muted-foreground">
-            <Download className="w-3.5 h-3.5" /> Xuất CSV
-          </Button>
         </div>
       </header>
 
