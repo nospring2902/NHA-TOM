@@ -9,6 +9,8 @@ import { DeviceStatus, MetricQualityFlag, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../database/prisma.service';
 import { DeviceTokenCipherService } from '../devices/device-token-cipher.service';
+import { AlertNotifierService } from '../alerts/alert-notifier.service';
+import { DeviceStatusBroadcaster } from './device-status-broadcaster.service';
 import { TelemetryIngestDto } from './dto/telemetry-ingest.dto';
 import { TelemetryStatusChangeDto } from './dto/telemetry-status-change.dto';
 
@@ -46,6 +48,8 @@ export class TelemetryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokenCipherService: DeviceTokenCipherService,
+    private readonly alertNotifierService: AlertNotifierService,
+    private readonly deviceStatusBroadcaster: DeviceStatusBroadcaster,
   ) {}
 
   async ingest(payload: TelemetryIngestDto, ingestTokenHeader?: string) {
@@ -208,6 +212,21 @@ export class TelemetryService {
         };
       });
 
+      // Đánh giá ngưỡng và phát cảnh báo (ngoài transaction để không ảnh hưởng ingest).
+      if (!ingestResult.duplicate && ingestResult.pondId) {
+        // Đẩy trạng thái ONLINE + mốc telemetry mới nhất tới cả nhóm ao để đồng bộ tức thì.
+        await this.deviceStatusBroadcaster.broadcast({
+          pondId: ingestResult.pondId,
+          deviceId: device.id,
+          status: DeviceStatus.ONLINE,
+          lastTelemetryAt: receivedAt,
+        });
+
+        // Thiết bị đang gửi telemetry => đã online trở lại, đóng cảnh báo mất kết nối cũ.
+        await this.alertNotifierService.resolveConnectionAlerts(ingestResult.pondId);
+        await this.alertNotifierService.evaluateAndNotify(ingestResult.pondId, metrics);
+      }
+
       return {
         success: true,
         message: ingestResult.duplicate
@@ -284,6 +303,22 @@ export class TelemetryService {
           },
         },
       });
+
+      // Đẩy trạng thái mới tới nhóm ao đang gắn thiết bị này (nếu có).
+      const activeBinding = await this.prisma.pondDevice.findFirst({
+        where: { deviceId: updated.id, unboundAt: null },
+        orderBy: { boundAt: 'desc' },
+        select: { pondId: true },
+      });
+
+      if (activeBinding) {
+        await this.deviceStatusBroadcaster.broadcast({
+          pondId: activeBinding.pondId,
+          deviceId: updated.id,
+          status: updated.status,
+          lastTelemetryAt: updated.lastTelemetryAt,
+        });
+      }
 
       return {
         success: true,

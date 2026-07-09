@@ -1,7 +1,7 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import { vi } from "date-fns/locale";
 
-export const HEARTBEAT_TIMEOUT_MS = 2 * 60 * 1000;
+export const HEARTBEAT_TIMEOUT_MS = 5 * 1000;
 
 export type RealtimeSignalStatus = "WAITING_SIGNAL" | "ONLINE" | "OFFLINE";
 

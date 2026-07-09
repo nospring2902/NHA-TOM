@@ -1,12 +1,17 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { PondAccessService } from '../collaboration/pond-access.service';
 
 @Injectable()
 export class AlertsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pondAccessService: PondAccessService,
+  ) {}
 
   async list(pondId: string, userId: string) {
-    await this.assertPondOwnership(pondId, userId);
+    // Chủ ao và toàn bộ thành viên cộng tác đều được xem cảnh báo của ao.
+    await this.pondAccessService.assertReadAccess(pondId, userId);
 
     const alerts = await this.prisma.alert.findMany({
       where: {
@@ -32,24 +37,5 @@ export class AlertsService {
         createdAt: alert.createdAt,
       })),
     };
-  }
-
-  private async assertPondOwnership(pondId: string, userId: string) {
-    const pond = await this.prisma.pond.findUnique({
-      where: {
-        id: pondId,
-      },
-      select: {
-        ownerId: true,
-      },
-    });
-
-    if (!pond) {
-      throw new NotFoundException('Không tìm thấy ao tôm');
-    }
-
-    if (pond.ownerId !== userId) {
-      throw new ForbiddenException('Bạn không có quyền truy cập ao tôm này');
-    }
   }
 }

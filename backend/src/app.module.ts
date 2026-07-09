@@ -11,6 +11,7 @@ import { CollaborationModule } from './modules/collaboration/collaboration.modul
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DevicesModule } from './modules/devices/devices.module';
 import { FriendsModule } from './modules/friends/friends.module';
+import { MailModule } from './modules/mail/mail.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PondsModule } from './modules/ponds/ponds.module';
@@ -27,6 +28,7 @@ import { UsersModule } from './modules/users/users.module';
     }),
     ScheduleModule.forRoot(),
     DatabaseModule,
+    MailModule,
     AuthModule,
     UsersModule,
     PondsModule,

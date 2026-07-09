@@ -406,7 +406,9 @@ export class PondsService {
   }
 
   async getTelemetryStatus(pondId: string, deviceId: string, userId: string) {
-    await this.findOwnedPondOrThrow(pondId, userId);
+    // Cho phép cả chủ ao và thành viên cộng tác xem trạng thái telemetry
+    // để giao diện trạng thái thiết bị đồng bộ giữa mọi người.
+    await this.pondAccessService.assertReadAccess(pondId, userId);
 
     const pondDevice = await this.prisma.pondDevice.findFirst({
       where: {

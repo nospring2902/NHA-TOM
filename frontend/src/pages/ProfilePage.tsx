@@ -70,6 +70,7 @@ type PondRow = {
   name: string;
   areaM2: number;
   location: string;
+  ownerId?: string;
   latitude?: number | null;
   longitude?: number | null;
   lat?: number | null;
@@ -96,6 +97,7 @@ type ProfilePond = {
   status: PondSetupStatus;
   boundDevice?: BoundDevice;
   isCollaborative?: boolean;
+  ownerId?: string;
   ownerName?: string;
 };
 
@@ -249,6 +251,7 @@ const ProfilePage = () => {
   const [pondTotal, setPondTotal] = useState<number | null>(null);
   const [postTotal, setPostTotal] = useState<number | null>(null);
   const [selectedPondIdForTasks, setSelectedPondIdForTasks] = useState<string>("");
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string>("");
 
   const { socket } = useRealtime();
   const [invites, setInvites] = useState<FarmInvite[]>([]);
@@ -280,6 +283,65 @@ const ProfilePage = () => {
       socket.off("farm:invite", handleNewInvite);
     };
   }, [socket, fetchInvites]);
+
+  // Nhận trạng thái thiết bị realtime (push) để đồng bộ tức thì cho cả chủ ao và thành viên.
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDeviceStatus = (payload: {
+      pondId: string;
+      deviceId: string;
+      status: BoundDevice["status"];
+      lastTelemetryAt: string | null;
+      telemetryPackets?: number;
+    }) => {
+      setPonds((current) => {
+        let hasChanges = false;
+
+        const next = current.map((item) => {
+          if (!item.boundDevice) {
+            return item;
+          }
+
+          if (item.id !== payload.pondId || item.boundDevice.id !== payload.deviceId) {
+            return item;
+          }
+
+          const nextTelemetryPackets =
+            typeof payload.telemetryPackets === "number"
+              ? payload.telemetryPackets
+              : item.boundDevice.telemetryPackets;
+
+          if (
+            item.boundDevice.status === payload.status &&
+            item.boundDevice.lastTelemetryAt === payload.lastTelemetryAt &&
+            item.boundDevice.telemetryPackets === nextTelemetryPackets
+          ) {
+            return item;
+          }
+
+          hasChanges = true;
+          return {
+            ...item,
+            status: mapDeviceStatusToPondStatus(payload.status),
+            boundDevice: {
+              ...item.boundDevice,
+              status: payload.status,
+              lastTelemetryAt: payload.lastTelemetryAt,
+              telemetryPackets: nextTelemetryPackets,
+            },
+          };
+        });
+
+        return hasChanges ? next : current;
+      });
+    };
+
+    socket.on("device:status", handleDeviceStatus);
+    return () => {
+      socket.off("device:status", handleDeviceStatus);
+    };
+  }, [socket]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -379,6 +441,7 @@ const ProfilePage = () => {
               score,
               status: "READY" as PondSetupStatus,
               isCollaborative: pond.isCollaborative,
+              ownerId: pond.ownerId,
               ownerName: pond.ownerName,
             };
           }
@@ -395,6 +458,7 @@ const ProfilePage = () => {
             status: mapDeviceStatusToPondStatus(primaryDevice.status),
             boundDevice,
             isCollaborative: pond.isCollaborative,
+            ownerId: pond.ownerId,
             ownerName: pond.ownerName,
           };
         });
@@ -575,9 +639,10 @@ const ProfilePage = () => {
     };
 
     void pollTelemetryStatus();
+    // Push realtime (device:status) là nguồn cập nhật chính; poll chỉ còn là dự phòng.
     const timer = window.setInterval(() => {
       void pollTelemetryStatus();
-    }, 10000);
+    }, 60000);
 
     return () => {
       isMounted = false;
@@ -758,8 +823,38 @@ const ProfilePage = () => {
     [navigate],
   );
 
+  const displayName = profileUser?.fullName ?? session?.user.fullName ?? "Người dùng";
+
+  const pondOwners = useMemo(() => {
+    const owners = new Map<string, string>();
+    if (currentUserId) {
+      owners.set(currentUserId, displayName);
+    }
+
+    for (const pond of ponds) {
+      if (pond.isCollaborative && pond.ownerId) {
+        owners.set(pond.ownerId, pond.ownerName ?? "Người dùng");
+      }
+    }
+
+    return Array.from(owners.entries()).map(([id, name]) => ({ id, name }));
+  }, [ponds, currentUserId, displayName]);
+
+  const effectiveOwnerId =
+    selectedOwnerId && pondOwners.some((owner) => owner.id === selectedOwnerId)
+      ? selectedOwnerId
+      : currentUserId ?? "";
+
+  const filteredPonds = useMemo(() => {
+    if (!effectiveOwnerId) {
+      return ponds;
+    }
+
+    return ponds.filter((pond) => (pond.ownerId ?? currentUserId) === effectiveOwnerId);
+  }, [ponds, effectiveOwnerId, currentUserId]);
+
   const pondsWithCoordinates = useMemo(() => {
-    return ponds.filter(
+    return filteredPonds.filter(
       (
         pond,
       ): pond is ProfilePond & {
@@ -767,10 +862,9 @@ const ProfilePage = () => {
         longitude: number;
       } => hasValidCoordinatePair(pond.latitude, pond.longitude),
     );
-  }, [ponds]);
+  }, [filteredPonds]);
 
-  const pondsMissingCoordinatesCount = ponds.length - pondsWithCoordinates.length;
-  const displayName = profileUser?.fullName ?? session?.user.fullName ?? "Người dùng";
+  const pondsMissingCoordinatesCount = filteredPonds.length - pondsWithCoordinates.length;
   const profileEmail = profileUser?.email ?? session?.user.email ?? "";
   const resolvedAvatarUrl = resolveAvatarUrl(profileUser?.avatarUrl);
 
@@ -972,8 +1066,26 @@ const ProfilePage = () => {
               </div>
             )}
 
-            <div className="flex justify-end">
-              <div className="inline-flex items-center rounded-lg border border-border bg-card p-1 shadow-card">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              {pondOwners.length > 1 ? (
+                <Select value={effectiveOwnerId} onValueChange={setSelectedOwnerId}>
+                  <SelectTrigger className="w-full sm:w-[240px]">
+                    <SelectValue placeholder="Chọn chủ ao..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pondOwners.map((owner) => (
+                      <SelectItem key={owner.id} value={owner.id}>
+                        {owner.id === currentUserId
+                          ? `Ao tôm của tôi (${owner.name})`
+                          : `Ao tôm của ${owner.name}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div />
+              )}
+              <div className="inline-flex items-center self-end sm:self-auto rounded-lg border border-border bg-card p-1 shadow-card">
                 <button
                   type="button"
                   onClick={() => setPondViewMode("list")}
@@ -1020,7 +1132,15 @@ const ProfilePage = () => {
               </div>
             )}
 
-            {!isLoadingPonds && !pondLoadError && ponds.length > 0 && pondViewMode === "map" && (
+            {!isLoadingPonds && !pondLoadError && ponds.length > 0 && filteredPonds.length === 0 && (
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground text-center">
+                {effectiveOwnerId === currentUserId
+                  ? "Bạn chưa có ao tôm nào. Hãy tạo nhà tôm đầu tiên."
+                  : "Người này chưa có ao tôm nào."}
+              </div>
+            )}
+
+            {!isLoadingPonds && !pondLoadError && filteredPonds.length > 0 && pondViewMode === "map" && (
               <>
                 {pondsWithCoordinates.length > 0 ? (
                   <PondsMapView ponds={pondsWithCoordinates} onOpenDashboard={handleOpenDashboard} />
@@ -1038,7 +1158,7 @@ const ProfilePage = () => {
               </>
             )}
 
-            {!isLoadingPonds && !pondLoadError && pondViewMode === "list" && ponds.map((pond) => {
+            {!isLoadingPonds && !pondLoadError && pondViewMode === "list" && filteredPonds.map((pond) => {
               const statusConfig = statusUi[pond.status];
 
               return (
@@ -1104,7 +1224,9 @@ const ProfilePage = () => {
               );
             })}
 
-            <AddPondModal onCreated={handlePondCreated} />
+            {effectiveOwnerId === currentUserId && (
+              <AddPondModal onCreated={handlePondCreated} />
+            )}
           </div>
         )}
 
